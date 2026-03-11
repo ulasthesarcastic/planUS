@@ -1,0 +1,25 @@
+package com.projectmanager.model;
+
+public class ResourceEntry {
+    private String personnelId;
+    private int month;
+    private int year;
+    private Double need;
+    private Double planned;
+    private Double actual;
+
+    public ResourceEntry() {}
+
+    public String getPersonnelId() { return personnelId; }
+    public void setPersonnelId(String personnelId) { this.personnelId = personnelId; }
+    public int getMonth() { return month; }
+    public void setMonth(int month) { this.month = month; }
+    public int getYear() { return year; }
+    public void setYear(int year) { this.year = year; }
+    public Double getNeed() { return need; }
+    public void setNeed(Double need) { this.need = need; }
+    public Double getPlanned() { return planned; }
+    public void setPlanned(Double planned) { this.planned = planned; }
+    public Double getActual() { return actual; }
+    public void setActual(Double actual) { this.actual = actual; }
+}
