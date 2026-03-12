@@ -727,13 +727,20 @@ export default function ProjectsPage() {
 
   if (selectedProject) {
     return (
-      <ProjectDetail
-        project={selectedProject}
-        allPersonnel={personnel}
-        onBack={() => { setSelectedProject(null); load(); }}
-        onEdit={() => { setEditing(selectedProject); setModalOpen(true); }}
-        onUpdate={refreshSelected}
-      />
+      <div>
+        <ProjectDetail
+          project={selectedProject}
+          allPersonnel={personnel}
+          onBack={() => { setSelectedProject(null); load(); }}
+          onEdit={() => { setEditing(selectedProject); setModalOpen(true); }}
+          onUpdate={refreshSelected}
+        />
+        {modalOpen && (
+          <ProjectModal project={editing} personnel={personnel}
+            onSave={() => { setModalOpen(false); refreshSelected(); }}
+            onClose={() => setModalOpen(false)} />
+        )}
+      </div>
     );
   }
 
