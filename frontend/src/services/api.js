@@ -26,6 +26,7 @@ export const projectApi = {
   delete: (id) => API.delete(`/projects/${id}`),
   // Partial updates
   updatePersonnel: (id, personnelIds) => API.put(`/projects/${id}/personnel`, personnelIds),
+  updateProducts: (id, productIds) => API.put(`/projects/${id}/products`, productIds),
   updatePaymentPlan: (id, paymentPlan) => API.put(`/projects/${id}/payment-plan`, paymentPlan),
   updateMilestones: (id, milestones) => API.put(`/projects/${id}/milestones`, milestones),
   updateResourcePlan: (id, resourcePlan) => API.put(`/projects/${id}/resource-plan`, resourcePlan),

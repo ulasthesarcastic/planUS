@@ -53,6 +53,13 @@ public class ProjectService {
     }
 
     // Partial updates — sadece ilgili listeyi günceller
+    public Optional<Project> updateProducts(String id, List<String> productIds) {
+        return projectRepository.findById(id).map(existing -> {
+            existing.setProductIds(productIds);
+            return projectRepository.save(existing);
+        });
+    }
+
     public Optional<Project> updatePersonnel(String id, List<String> personnelIds) {
         return projectRepository.findById(id).map(existing -> {
             existing.setPersonnelIds(personnelIds);

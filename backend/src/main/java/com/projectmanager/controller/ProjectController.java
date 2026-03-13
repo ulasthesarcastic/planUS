@@ -79,6 +79,13 @@ public class ProjectController {
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
+    @PutMapping("/{id}/products")
+    public ResponseEntity<?> updateProducts(@PathVariable String id, @RequestBody List<String> productIds) {
+        return projectService.updateProducts(id, productIds)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
     @PutMapping("/{id}/resource-plan")
     public ResponseEntity<?> updateResourcePlan(@PathVariable String id, @RequestBody List<ResourceEntry> resourcePlan) {
         return projectService.updateResourcePlan(id, resourcePlan)

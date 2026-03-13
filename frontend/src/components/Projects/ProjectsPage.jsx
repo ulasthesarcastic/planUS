@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { projectApi, personnelApi } from '../../services/api';
+import { projectApi, personnelApi, productApi } from '../../services/api';
 
 const MONTHS = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran',
                  'Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
@@ -628,13 +628,86 @@ function MilestonesTab({ project, onUpdate }) {
   );
 }
 
+// ── TAB 4: ÜRÜNLER ──────────────────────────────────────────────
+function ProductsTab({ project, allProducts, onUpdate }) {
+  const [saving, setSaving] = useState(false);
+  const assigned = project.productIds || [];
+  const assignedSet = new Set(assigned);
+
+  const toggle = async (productId, add) => {
+    setSaving(true);
+    const newIds = add ? [...assigned, productId] : assigned.filter(id => id !== productId);
+    try {
+      await projectApi.updateProducts(project.id, newIds);
+      await onUpdate();
+    } finally { setSaving(false); }
+  };
+
+  const assignedProducts = allProducts.filter(p => assignedSet.has(p.id));
+  const available = allProducts.filter(p => !assignedSet.has(p.id));
+
+  const TRL_COLORS = [null,'#6b7280','#6b7280','#2563eb','#2563eb','#7c3aed','#7c3aed','#d97706','#d97706','#16a34a'];
+
+  return (
+    <div>
+      {assignedProducts.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--text-muted)', marginBottom: 10 }}>
+            Projedeki Ürünler ({assignedProducts.length})
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {assignedProducts.map(p => (
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--bg-secondary)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontWeight: 500 }}>{p.name}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 12, background: `${TRL_COLORS[p.trlLevel]}22`, color: TRL_COLORS[p.trlLevel], border: `1px solid ${TRL_COLORS[p.trlLevel]}44`, fontFamily: 'DM Mono, monospace' }}>
+                    TRL {p.trlLevel}
+                  </span>
+                </div>
+                <button className="btn-icon danger" disabled={saving} onClick={() => toggle(p.id, false)}><TrashIcon /></button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {available.length > 0 && (
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--text-muted)', marginBottom: 10 }}>
+            Eklenebilir Ürünler
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {available.map(p => (
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 8, border: '1px dashed var(--border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>{p.name}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 12, background: `${TRL_COLORS[p.trlLevel]}22`, color: TRL_COLORS[p.trlLevel], border: `1px solid ${TRL_COLORS[p.trlLevel]}44`, fontFamily: 'DM Mono, monospace' }}>
+                    TRL {p.trlLevel}
+                  </span>
+                </div>
+                <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 12 }} disabled={saving} onClick={() => toggle(p.id, true)}>
+                  <PlusIcon /> Ekle
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {allProducts.length === 0 && <div className="empty-state"><p>Henüz ürün tanımlanmamış.</p></div>}
+      {allProducts.length > 0 && assignedProducts.length === 0 && available.length === 0 && (
+        <div className="empty-state"><p>Tüm ürünler bu projeye eklenmiş.</p></div>
+      )}
+    </div>
+  );
+}
+
 // ── PROJE DETAY EKRANI ───────────────────────────────────────────
-function ProjectDetail({ project, allPersonnel, onBack, onEdit, onUpdate }) {
+function ProjectDetail({ project, allPersonnel, allProducts, onBack, onEdit, onUpdate }) {
   const [activeTab, setActiveTab] = useState('personnel');
   const tabs = [
     { id:'personnel', label:'Proje Personeli' },
     { id:'payment', label:'Ödeme Planı' },
     { id:'milestones', label:'Kilometre Taşları' },
+    { id:'products', label:'Ürünler' },
   ];
   const projectAmount = (project.paymentPlan||[]).reduce((s,i) => s+(i.amount||0), 0);
 
@@ -680,6 +753,7 @@ function ProjectDetail({ project, allPersonnel, onBack, onEdit, onUpdate }) {
         {activeTab==='personnel' && <PersonnelTab project={project} allPersonnel={allPersonnel} onUpdate={onUpdate} />}
         {activeTab==='payment' && <PaymentTab project={project} onUpdate={onUpdate} />}
         {activeTab==='milestones' && <MilestonesTab project={project} onUpdate={onUpdate} />}
+        {activeTab==='products' && <ProductsTab project={project} allProducts={allProducts} onUpdate={onUpdate} />}
       </div>
     </div>
   );
@@ -689,6 +763,7 @@ function ProjectDetail({ project, allPersonnel, onBack, onEdit, onUpdate }) {
 export default function ProjectsPage() {
   const [projects, setProjects] = useState([]);
   const [personnel, setPersonnel] = useState([]);
+  const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedProject, setSelectedProject] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -696,9 +771,10 @@ export default function ProjectsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   const load = async () => {
-    const [pRes, perRes] = await Promise.all([projectApi.getAll(), personnelApi.getAll()]);
+    const [pRes, perRes, prRes] = await Promise.all([projectApi.getAll(), personnelApi.getAll(), productApi.getAll()]);
     setProjects(pRes.data);
     setPersonnel(perRes.data);
+    setProducts(prRes.data);
     setLoading(false);
   };
 
@@ -727,20 +803,14 @@ export default function ProjectsPage() {
 
   if (selectedProject) {
     return (
-      <div>
-        <ProjectDetail
-          project={selectedProject}
-          allPersonnel={personnel}
-          onBack={() => { setSelectedProject(null); load(); }}
-          onEdit={() => { setEditing(selectedProject); setModalOpen(true); }}
-          onUpdate={refreshSelected}
-        />
-        {modalOpen && (
-          <ProjectModal project={editing} personnel={personnel}
-            onSave={() => { setModalOpen(false); refreshSelected(); }}
-            onClose={() => setModalOpen(false)} />
-        )}
-      </div>
+      <ProjectDetail
+        project={selectedProject}
+        allPersonnel={personnel}
+        allProducts={products}
+        onBack={() => { setSelectedProject(null); load(); }}
+        onEdit={() => { setEditing(selectedProject); setModalOpen(true); }}
+        onUpdate={refreshSelected}
+      />
     );
   }
 

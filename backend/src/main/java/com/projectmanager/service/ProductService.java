@@ -3,6 +3,7 @@ package com.projectmanager.service;
 import com.projectmanager.model.Product;
 import com.projectmanager.repository.PersonnelRepository;
 import com.projectmanager.repository.ProductRepository;
+import com.projectmanager.repository.ProjectRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -14,11 +15,14 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final PersonnelRepository personnelRepository;
+    private final ProjectRepository projectRepository;
 
     public ProductService(ProductRepository productRepository,
-                          PersonnelRepository personnelRepository) {
+                          PersonnelRepository personnelRepository,
+                          ProjectRepository projectRepository) {
         this.productRepository = productRepository;
         this.personnelRepository = personnelRepository;
+        this.projectRepository = projectRepository;
     }
 
     public List<Product> getAll() { return productRepository.findAll(); }
@@ -42,7 +46,21 @@ public class ProductService {
         });
     }
 
-    public boolean delete(String id) { return productRepository.deleteById(id); }
+    public boolean delete(String id) {
+        boolean deleted = productRepository.deleteById(id);
+        if (deleted) {
+            // Ürünü kullanan projelerdeki referansı temizle
+            projectRepository.findAll().forEach(project -> {
+                List<String> ids = project.getProductIds();
+                if (ids != null && ids.contains(id)) {
+                    ids.remove(id);
+                    project.setProductIds(ids);
+                    projectRepository.save(project);
+                }
+            });
+        }
+        return deleted;
+    }
 
     private void validate(Product p) {
         if (p.getName() == null || p.getName().isBlank())

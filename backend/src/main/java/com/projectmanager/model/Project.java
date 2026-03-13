@@ -19,6 +19,7 @@ public class Project {
 
     // Alt listeler
     private List<String> personnelIds = new ArrayList<>();
+    private List<String> productIds = new ArrayList<>();
     private List<PaymentItem> paymentPlan = new ArrayList<>();
     private List<Milestone> milestones = new ArrayList<>();
     private List<ResourceEntry> resourcePlan = new ArrayList<>();
@@ -57,6 +58,8 @@ public class Project {
     public void setTechLeadId(String techLeadId) { this.techLeadId = techLeadId; }
     public List<String> getPersonnelIds() { return personnelIds; }
     public void setPersonnelIds(List<String> personnelIds) { this.personnelIds = personnelIds; }
+    public List<String> getProductIds() { return productIds; }
+    public void setProductIds(List<String> productIds) { this.productIds = productIds; }
     public List<PaymentItem> getPaymentPlan() { return paymentPlan; }
     public void setPaymentPlan(List<PaymentItem> paymentPlan) { this.paymentPlan = paymentPlan; }
     public List<Milestone> getMilestones() { return milestones; }
