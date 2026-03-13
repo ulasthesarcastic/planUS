@@ -5,6 +5,7 @@ import PersonnelPage from './components/Personnel/PersonnelPage';
 import ProjectsPage from './components/Projects/ProjectsPage';
 import PlanningPage from './components/Planning/PlanningPage';
 import ProductsPage from './components/Products/ProductsPage';
+import BudgetPage from './components/Budget/BudgetPage';
 import './styles/global.css';
 
 export default function App() {
@@ -20,6 +21,7 @@ export default function App() {
             <Route path="/products" element={<ProductsPage />} />
             <Route path="/seniorities" element={<SenioritiesPage />} />
             <Route path="/personnel" element={<PersonnelPage />} />
+            <Route path="/budget" element={<BudgetPage />} />
           </Routes>
         </main>
       </div>
