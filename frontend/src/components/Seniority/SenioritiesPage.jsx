@@ -229,6 +229,8 @@ export default function SenioritiesPage() {
   const [editing, setEditing] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [deleteError, setDeleteError] = useState('');
+  const [sortCol, setSortCol] = useState(null);
+  const [sortDir, setSortDir] = useState('asc');
 
   const load = async () => {
     try {
@@ -276,13 +278,19 @@ export default function SenioritiesPage() {
             <table>
               <thead>
                 <tr>
-                  <th>Kıdem Adı</th>
+                  <th onClick={() => { if(sortCol==='name') setSortDir(d=>d==='asc'?'desc':'asc'); else{setSortCol('name');setSortDir('asc');} }} style={{ cursor:'pointer' }}>
+                    Kıdem Adı {sortCol!=='name'?<span style={{opacity:0.3,fontSize:10}}>↕</span>:<span style={{fontSize:10}}>{sortDir==='asc'?'↑':'↓'}</span>}
+                  </th>
                   <th>Maliyet Dönemleri</th>
                   <th style={{ textAlign: 'right' }}>İşlemler</th>
                 </tr>
               </thead>
               <tbody>
-                {seniorities.map(s => (
+                {[...seniorities].sort((a,b) => {
+                  if(!sortCol) return 0;
+                  const dir = sortDir==='asc'?1:-1;
+                  return dir * a.name.localeCompare(b.name,'tr');
+                }).map(s => (
                   <tr key={s.id}>
                     <td>
                       <span style={{ fontWeight: 500 }}>{s.name}</span>

@@ -2,6 +2,12 @@ import axios from 'axios';
 
 const API = axios.create({ baseURL: '/api' });
 
+API.interceptors.request.use(config => {
+  const token = localStorage.getItem('token');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
 export const seniorityApi = {
   getAll: () => API.get('/seniorities'),
   getById: (id) => API.get(`/seniorities/${id}`),
@@ -24,12 +30,21 @@ export const projectApi = {
   create: (data) => API.post('/projects', data),
   update: (id, data) => API.put(`/projects/${id}`, data),
   delete: (id) => API.delete(`/projects/${id}`),
-  // Partial updates
   updatePersonnel: (id, personnelIds) => API.put(`/projects/${id}/personnel`, personnelIds),
+  updateBudget: (id, data) => API.put(`/projects/${id}/budget`, data),
   updateProducts: (id, productIds) => API.put(`/projects/${id}/products`, productIds),
   updatePaymentPlan: (id, paymentPlan) => API.put(`/projects/${id}/payment-plan`, paymentPlan),
   updateMilestones: (id, milestones) => API.put(`/projects/${id}/milestones`, milestones),
   updateResourcePlan: (id, resourcePlan) => API.put(`/projects/${id}/resource-plan`, resourcePlan),
+};
+
+export const organizationApi = {
+  getAll: () => API.get('/organization'),
+  getRoots: () => API.get('/organization/roots'),
+  getChildren: (id) => API.get(`/organization/${id}/children`),
+  create: (data) => API.post('/organization', data),
+  update: (id, data) => API.put(`/organization/${id}`, data),
+  delete: (id) => API.delete(`/organization/${id}`),
 };
 
 export const productApi = {

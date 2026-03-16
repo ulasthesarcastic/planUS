@@ -1,29 +1,37 @@
 package com.projectmanager.model;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.persistence.*;
 import java.util.UUID;
 
-@JsonInclude(JsonInclude.Include.NON_NULL)
+@Entity
+@Table(name = "payment_items")
 public class PaymentItem {
+    @Id
     private String id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "project_id")
+    @JsonBackReference("project-payments")
+    private Project project;
+
     private String name;
     private double amount;
     private String currency;
-
     private Integer plannedMonth;
     private Integer plannedYear;
-
     private Integer actualMonth;
     private Integer actualYear;
     private Double actualAmount;
     private boolean completed;
 
-    public PaymentItem() {
-        this.id = UUID.randomUUID().toString();
-    }
+    public PaymentItem() { this.id = UUID.randomUUID().toString(); }
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
+    public Project getProject() { return project; }
+    public void setProject(Project project) { this.project = project; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
     public double getAmount() { return amount; }

@@ -1,13 +1,23 @@
 package com.projectmanager.model;
 
+import jakarta.persistence.*;
 import java.util.UUID;
 
+@Entity
+@Table(name = "products")
 public class Product {
+    @Id
     private String id;
+
+    @Column(nullable = false)
     private String name;
-    private String ownerId;       // Personnel ID referansı
+
+    private String ownerId;
+
+    @Column(length = 1000)
     private String description;
-    private int trlLevel;         // 1-9
+
+    private int trlLevel;
 
     public Product() { this.id = UUID.randomUUID().toString(); }
 

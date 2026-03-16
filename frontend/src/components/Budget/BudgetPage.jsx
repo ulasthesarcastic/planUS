@@ -34,7 +34,7 @@ function calcProjectMonthlyCosts(project, personnelMap, seniorityMap) {
     if (!seniority) continue;
     const rate = getRateForMonth(seniority.rates, entry.year, entry.month);
     const key  = `${entry.year}_${entry.month}`;
-    if (entry.planned != null) planned[key] = (planned[key] || 0) + (rate * entry.planned / 100);
+    if (entry.planned != null) planned[key] = (planned[key] || 0) + (rate * entry.planned);
     if (entry.actual  != null) actual[key]  = (actual[key]  || 0) + (rate * entry.actual  / 100);
   }
   return { planned, actual };
@@ -170,6 +170,7 @@ function Chart({ monthlyData, chartType, onToggleType, activeMetrics }) {
 // ── ANA SAYFA ─────────────────────────────────────────────────────
 export default function BudgetPage() {
   const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1;
 
   const [projects,       setProjects]       = useState([]);
   const [personnelList,  setPersonnelList]  = useState([]);
@@ -181,6 +182,8 @@ export default function BudgetPage() {
   const [activeMetrics,  setActiveMetrics]  = useState(
     new Set(['plannedCost', 'plannedRevenue', 'plannedCashflow'])
   );
+  const [activeTab, setActiveTab] = useState('grafik');
+  const [analysisMonth, setAnalysisMonth] = useState(currentMonth);
 
   useEffect(() => {
     Promise.all([projectApi.getAll(), personnelApi.getAll(), seniorityApi.getAll()])
@@ -262,6 +265,125 @@ export default function BudgetPage() {
         </div>
       </div>
 
+      {/* SEKME NAVİGASYONU */}
+      <div style={{ display: 'flex', gap: 2, marginBottom: 20, borderBottom: '1px solid var(--border)' }}>
+        {[['grafik', 'Grafik & Özet'], ['analiz', 'Bütçe Analizi']].map(([id, label]) => (
+          <button key={id} onClick={() => setActiveTab(id)} style={{
+            padding: '9px 18px', fontSize: 13, fontWeight: activeTab === id ? 600 : 400,
+            color: activeTab === id ? 'var(--accent)' : 'var(--text-secondary)',
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            borderBottom: activeTab === id ? '2px solid var(--accent)' : '2px solid transparent',
+            fontFamily: 'DM Sans, sans-serif',
+          }}>{label}</button>
+        ))}
+      </div>
+
+      {activeTab === 'analiz' && (() => {
+        // Analiz tablosu hesaplama
+        const analysisProjects = projects.filter(p =>
+          p.projectType === 'MUSTERILI' || p.projectType === 'DIS'
+        );
+
+        const rows = analysisProjects.map(project => {
+          // Seçilen aydan Aralık'a kadar planlanan maliyet
+          let plannedCost = 0;
+          for (let m = analysisMonth; m <= 12; m++) {
+            const key = `${currentYear}_${m}`;
+            const costs = calcProjectMonthlyCosts(project, personnelMap, seniorityMap);
+            plannedCost += costs.planned[key] || 0;
+          }
+
+          const remainingBudget = project.remainingBudget || 0;
+          const potentialSales = project.potentialSales || 0;
+          const diff = remainingBudget + potentialSales - plannedCost;
+          const status = remainingBudget === 0 && potentialSales === 0 ? '—'
+            : diff >= 0 ? '✓ Yeterli' : '✗ Açık';
+
+          // Hangi ayda eksiye düşer
+          let eksiyeAy = null;
+          let cumCost = 0;
+          for (let m = analysisMonth; m <= 12; m++) {
+            const key = `${currentYear}_${m}`;
+            const costs = calcProjectMonthlyCosts(project, personnelMap, seniorityMap);
+            cumCost += costs.planned[key] || 0;
+            if (cumCost > remainingBudget + potentialSales && !eksiyeAy) {
+              eksiyeAy = MONTHS_FULL[m - 1];
+            }
+          }
+
+          return { project, plannedCost, remainingBudget, potentialSales, diff, status, eksiyeAy };
+        });
+
+        return (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+              <label className="form-label" style={{ margin: 0 }}>Analiz Ayı:</label>
+              <select className="form-select" style={{ width: 140 }}
+                value={analysisMonth} onChange={e => setAnalysisMonth(+e.target.value)}>
+                {MONTHS_FULL.map((m, i) => <option key={i+1} value={i+1}>{m}</option>)}
+              </select>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                {MONTHS_FULL[analysisMonth-1]}'dan Aralık'a kadar hesaplanır
+              </span>
+            </div>
+
+            <div className="card" style={{ padding: 0 }}>
+              <div className="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Proje</th>
+                      <th style={{ textAlign: 'right' }}>Planlanan Maliyet (₺)</th>
+                      <th style={{ textAlign: 'right' }}>Kalan Bütçe (₺)</th>
+                      <th style={{ textAlign: 'right' }}>Potansiyel Satış (₺)</th>
+                      <th style={{ textAlign: 'right' }}>Fark (₺)</th>
+                      <th style={{ textAlign: 'center' }}>Durum</th>
+                      <th style={{ textAlign: 'center' }}>Eksiye Düşüş</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map(({ project, plannedCost, remainingBudget, potentialSales, diff, status, eksiyeAy }) => (
+                      <tr key={project.id}>
+                        <td style={{ fontWeight: 500 }}>{project.name}</td>
+                        <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 13 }}>{fmt(plannedCost)}</td>
+                        <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 13, color: 'var(--accent)' }}>{fmt(remainingBudget)}</td>
+                        <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 13, color: '#34c97a' }}>{fmt(potentialSales)}</td>
+                        <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 13, fontWeight: 600, color: diff >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                          {diff >= 0 ? '+' : ''}{fmt(diff)}
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <span style={{
+                            fontSize: 12, fontWeight: 600, padding: '3px 10px', borderRadius: 20,
+                            background: status === '✓ Yeterli' ? 'var(--success)22' : status === '✗ Açık' ? 'var(--danger)22' : 'var(--bg-hover)',
+                            color: status === '✓ Yeterli' ? 'var(--success)' : status === '✗ Açık' ? 'var(--danger)' : 'var(--text-muted)',
+                          }}>{status}</span>
+                        </td>
+                        <td style={{ textAlign: 'center', fontSize: 13, color: eksiyeAy ? 'var(--warning)' : 'var(--success)' }}>
+                          {eksiyeAy || (status === '—' ? '—' : '✓ Yeterli')}
+                        </td>
+                      </tr>
+                    ))}
+                    {/* TOPLAM */}
+                    <tr style={{ borderTop: '2px solid var(--border)', fontWeight: 700 }}>
+                      <td>TOPLAM</td>
+                      <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 13 }}>{fmt(rows.reduce((s, r) => s + r.plannedCost, 0))}</td>
+                      <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 13, color: 'var(--accent)' }}>{fmt(rows.reduce((s, r) => s + r.remainingBudget, 0))}</td>
+                      <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 13, color: '#34c97a' }}>{fmt(rows.reduce((s, r) => s + r.potentialSales, 0))}</td>
+                      <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 13, fontWeight: 700,
+                        color: rows.reduce((s, r) => s + r.diff, 0) >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                        {(() => { const t = rows.reduce((s, r) => s + r.diff, 0); return (t >= 0 ? '+' : '') + fmt(t); })()}
+                      </td>
+                      <td /><td />
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {activeTab === 'grafik' && <>
       {/* METRİK SEÇİCİ */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
         {METRICS.map(m => (
@@ -358,6 +480,7 @@ export default function BudgetPage() {
           </table>
         </div>
       </div>
+      </>}
     </div>
   );
 }

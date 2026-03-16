@@ -79,6 +79,15 @@ public class ProjectController {
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
+    @PutMapping("/{id}/budget")
+    public ResponseEntity<?> updateBudget(@PathVariable String id, @RequestBody Map<String, Double> body) {
+        double remaining = body.getOrDefault("remainingBudget", 0.0);
+        double potential = body.getOrDefault("potentialSales", 0.0);
+        return projectService.updateBudget(id, remaining, potential)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
     @PutMapping("/{id}/products")
     public ResponseEntity<?> updateProducts(@PathVariable String id, @RequestBody List<String> productIds) {
         return projectService.updateProducts(id, productIds)

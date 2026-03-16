@@ -137,6 +137,8 @@ export default function ProductsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [sortCol, setSortCol] = useState(null);
+  const [sortDir, setSortDir] = useState('asc');
 
   const load = async () => {
     const [prRes, perRes] = await Promise.all([productApi.getAll(), personnelApi.getAll()]);
@@ -206,22 +208,26 @@ export default function ProductsPage() {
             <table>
               <thead>
                 <tr>
-                  <th>Ürün Adı</th>
+                  {[['name','Ürün Adı'],['owner','Ürün Sahibi'],['trl','TRL Seviyesi']].map(([col,label]) => (
+                    <th key={col} onClick={() => { if(sortCol===col) setSortDir(d=>d==='asc'?'desc':'asc'); else{setSortCol(col);setSortDir('asc');} }} style={{ cursor:'pointer' }}>
+                      {label} {sortCol!==col?<span style={{opacity:0.3,fontSize:10}}>↕</span>:<span style={{fontSize:10}}>{sortDir==='asc'?'↑':'↓'}</span>}
+                    </th>
+                  ))}
                   <th>Açıklama</th>
-                  <th>Ürün Sahibi</th>
-                  <th>TRL Seviyesi</th>
                   <th style={{ textAlign: 'right' }}>İşlemler</th>
                 </tr>
               </thead>
               <tbody>
-                {products.map(p => (
+                {[...products].sort((a,b) => {
+                  if(!sortCol) return 0;
+                  const dir = sortDir==='asc'?1:-1;
+                  if(sortCol==='name') return dir*(a.name||'').localeCompare(b.name||'','tr');
+                  if(sortCol==='owner') return dir*getOwnerName(a.ownerId).localeCompare(getOwnerName(b.ownerId),'tr');
+                  if(sortCol==='trl') return dir*((a.trlLevel||0)-(b.trlLevel||0));
+                  return 0;
+                }).map(p => (
                   <tr key={p.id}>
                     <td style={{ fontWeight: 600 }}>{p.name}</td>
-                    <td style={{ color: 'var(--text-secondary)', fontSize: 13, maxWidth: 300 }}>
-                      {p.description
-                        ? <span style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.description}</span>
-                        : <span style={{ color: 'var(--text-muted)' }}>—</span>}
-                    </td>
                     <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{getOwnerName(p.ownerId)}</td>
                     <td>
                       <div>

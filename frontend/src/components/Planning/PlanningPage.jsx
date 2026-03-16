@@ -119,7 +119,7 @@ function BulkAssignModal({ person, project, onSave, onClose }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <input className="form-input" value={val} onChange={e => setter(e.target.value)}
                   placeholder="—" style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace' }} />
-                <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>%</span>
+                
               </div>
             </div>
           ))}
@@ -255,7 +255,7 @@ function ProjectPlanTable({ project, personnel, onSave }) {
                         style={{ padding: '2px 2px', textAlign: 'center', borderLeft: type === 'need' ? '1px solid var(--border)' : 'none', verticalAlign: 'middle', background: v != null ? `${TYPE_COLORS[type]}18` : 'transparent' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
                           <PctInput value={v} onChange={val => setVal(person.id, year, month, type, val)} />
-                          {v != null && <span style={{ fontSize: 9, color: TYPE_COLORS[type] }}>%</span>}
+                          {}
                         </div>
                       </td>
                     );
@@ -279,6 +279,15 @@ export default function PlanningPage() {
   const [personnel, setPersonnel] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openProjectId, setOpenProjectId] = useState(null);
+  const [typeFilter, setTypeFilter] = useState('ALL');
+
+  const PROJECT_TYPES = [
+    { key: 'ALL', label: 'Tümü' },
+    { key: 'BOLUM', label: 'Bölüm Projesi' },
+    { key: 'MUSTERILI', label: 'Müşterili Proje' },
+    { key: 'DIS', label: 'Dış Proje' },
+    { key: 'IS_GELISTIRME', label: 'İş Geliştirme' },
+  ];
 
   const load = async () => {
     const [pRes, perRes] = await Promise.all([projectApi.getAll(), personnelApi.getAll()]);
@@ -307,12 +316,27 @@ export default function PlanningPage() {
         ))}
       </div>
 
+      {/* Proje Tipi Filtresi */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+        {PROJECT_TYPES.map(t => {
+          const count = t.key === 'ALL' ? projects.length : projects.filter(p => p.projectType === t.key).length;
+          return (
+            <button key={t.key} onClick={() => setTypeFilter(t.key)} style={{
+              padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              border: '1px solid var(--border)', fontFamily: 'DM Sans, sans-serif',
+              background: typeFilter === t.key ? 'var(--accent)' : 'var(--bg-secondary)',
+              color: typeFilter === t.key ? '#fff' : 'var(--text-secondary)',
+            }}>{t.label} ({count})</button>
+          );
+        })}
+      </div>
+
       {loading ? (
         <div className="loading">Yükleniyor...</div>
       ) : projects.length === 0 ? (
         <div className="empty-state"><p>Henüz proje eklenmemiş.</p></div>
       ) : (
-        projects.map(project => {
+        projects.filter(p => typeFilter === 'ALL' || p.projectType === typeFilter).map(project => {
           const isOpen = openProjectId === project.id;
           const assignedCount = (project.personnelIds || []).length;
           return (

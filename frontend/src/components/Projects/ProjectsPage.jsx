@@ -700,6 +700,74 @@ function ProductsTab({ project, allProducts, onUpdate }) {
   );
 }
 
+// ── TAB 5: BÜTÇE ────────────────────────────────────────────────
+function BudgetTab({ project, onUpdate }) {
+  const [remainingBudget, setRemainingBudget] = useState(project.remainingBudget || 0);
+  const [potentialSales, setPotentialSales] = useState(project.potentialSales || 0);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const fmt = (n) => (n||0).toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  const totalBudget = project.budget || 0;
+  const currency = project.budgetCurrency || 'TRY';
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await projectApi.updateBudget(project.id, {
+        remainingBudget: parseFloat(remainingBudget) || 0,
+        potentialSales: parseFloat(potentialSales) || 0,
+      });
+      await onUpdate();
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div style={{ maxWidth: 520 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+        {/* Toplam Bütçe - readonly */}
+        <div style={{ padding: '16px 20px', background: 'var(--bg-secondary)', borderRadius: 10, border: '1px solid var(--border)' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--text-muted)', marginBottom: 6 }}>Toplam Bütçe</div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--accent)', fontFamily: 'DM Mono, monospace' }}>
+            {fmt(totalBudget)} <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>{currency}</span>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Proje bilgilerinden güncellenir</div>
+        </div>
+
+        {/* Kalan Bütçe - düzenlenebilir */}
+        <div className="form-group">
+          <label className="form-label">Kalan Bütçe ({currency})</label>
+          <input className="form-input" type="number" value={remainingBudget}
+            onChange={e => setRemainingBudget(e.target.value)}
+            placeholder="0" style={{ fontFamily: 'DM Mono, monospace' }} />
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+            Kullanılan: {fmt(totalBudget - (parseFloat(remainingBudget) || 0))} {currency}
+          </div>
+        </div>
+
+        {/* Potansiyel Satış - düzenlenebilir */}
+        <div className="form-group">
+          <label className="form-label">Potansiyel Satış ({currency})</label>
+          <input className="form-input" type="number" value={potentialSales}
+            onChange={e => setPotentialSales(e.target.value)}
+            placeholder="0" style={{ fontFamily: 'DM Mono, monospace' }} />
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+            Kesinleşmemiş ama beklenen gelir
+          </div>
+        </div>
+
+        <button className="btn btn-primary" onClick={handleSave} disabled={saving}
+          style={{ alignSelf: 'flex-start' }}>
+          {saving ? 'Kaydediliyor...' : saved ? '✓ Kaydedildi' : 'Kaydet'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── PROJE DETAY EKRANI ───────────────────────────────────────────
 function ProjectDetail({ project, allPersonnel, allProducts, onBack, onEdit, onUpdate }) {
   const [activeTab, setActiveTab] = useState('personnel');
@@ -708,6 +776,7 @@ function ProjectDetail({ project, allPersonnel, allProducts, onBack, onEdit, onU
     { id:'payment', label:'Ödeme Planı' },
     { id:'milestones', label:'Kilometre Taşları' },
     { id:'products', label:'Ürünler' },
+    { id:'budget', label:'Bütçe' },
   ];
   const projectAmount = (project.paymentPlan||[]).reduce((s,i) => s+(i.amount||0), 0);
 
@@ -734,7 +803,7 @@ function ProjectDetail({ project, allPersonnel, allProducts, onBack, onEdit, onU
             {fmt(projectAmount)} {project.budgetCurrency}
           </div>
         </div>
-        <button className="btn btn-ghost" onClick={onEdit}><EditIcon /> Düzenle</button>
+        <button className="btn btn-ghost" onClick={() => onEdit(project)}><EditIcon /> Düzenle</button>
       </div>
 
       <div style={{ display:'flex', gap:2, marginBottom:24, borderBottom:'1px solid var(--border)' }}>
@@ -754,6 +823,7 @@ function ProjectDetail({ project, allPersonnel, allProducts, onBack, onEdit, onU
         {activeTab==='payment' && <PaymentTab project={project} onUpdate={onUpdate} />}
         {activeTab==='milestones' && <MilestonesTab project={project} onUpdate={onUpdate} />}
         {activeTab==='products' && <ProductsTab project={project} allProducts={allProducts} onUpdate={onUpdate} />}
+        {activeTab==='budget' && <BudgetTab project={project} onUpdate={onUpdate} />}
       </div>
     </div>
   );
@@ -769,6 +839,9 @@ export default function ProjectsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [typeFilter, setTypeFilter] = useState('ALL');
+  const [sortCol, setSortCol] = useState(null);
+  const [sortDir, setSortDir] = useState('asc');
 
   const load = async () => {
     const [pRes, perRes, prRes] = await Promise.all([projectApi.getAll(), personnelApi.getAll(), productApi.getAll()]);
@@ -798,21 +871,64 @@ export default function ProjectsPage() {
   const handleDelete = async (id) => {
     await projectApi.delete(id);
     setDeleteConfirm(null);
+    setSelectedProject(null);
     load();
   };
 
   if (selectedProject) {
     return (
-      <ProjectDetail
-        project={selectedProject}
-        allPersonnel={personnel}
-        allProducts={products}
-        onBack={() => { setSelectedProject(null); load(); }}
-        onEdit={() => { setEditing(selectedProject); setModalOpen(true); }}
-        onUpdate={refreshSelected}
-      />
+      <>
+        <ProjectDetail
+          project={selectedProject}
+          allPersonnel={personnel}
+          allProducts={products}
+          onBack={() => { setSelectedProject(null); load(); }}
+          onEdit={(p) => { setEditing(p || selectedProject); setModalOpen(true); }}
+          onUpdate={refreshSelected}
+        />
+        {modalOpen && (
+          <ProjectModal project={editing} personnel={personnel}
+            onSave={() => { setModalOpen(false); refreshSelected(); }}
+            onClose={() => setModalOpen(false)} />
+        )}
+      </>
     );
   }
+
+  const PROJECT_TYPES = [
+    { key: 'ALL', label: 'Tümü' },
+    { key: 'BOLUM', label: 'Bölüm Projesi' },
+    { key: 'MUSTERILI', label: 'Müşterili Proje' },
+    { key: 'DIS', label: 'Dış Proje' },
+    { key: 'IS_GELISTIRME', label: 'İş Geliştirme' },
+  ];
+
+  const handleSort = (col) => {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortCol(col); setSortDir('asc'); }
+  };
+
+  const SortIcon = ({ col }) => {
+    if (sortCol !== col) return <span style={{ opacity: 0.3, fontSize: 10 }}>↕</span>;
+    return <span style={{ fontSize: 10 }}>{sortDir === 'asc' ? '↑' : '↓'}</span>;
+  };
+
+  const filteredProjects = projects
+    .filter(p => typeFilter === 'ALL' || p.projectType === typeFilter)
+    .sort((a, b) => {
+      if (!sortCol) return 0;
+      const dir = sortDir === 'asc' ? 1 : -1;
+      if (sortCol === 'name') return dir * (a.name||'').localeCompare(b.name||'', 'tr');
+      if (sortCol === 'customer') return dir * (a.customerName||'').localeCompare(b.customerName||'', 'tr');
+      if (sortCol === 'budget') return dir * ((a.budget||0) - (b.budget||0));
+      if (sortCol === 'amount') {
+        const aAmt = (a.paymentPlan||[]).reduce((s,i) => s+(i.amount||0), 0);
+        const bAmt = (b.paymentPlan||[]).reduce((s,i) => s+(i.amount||0), 0);
+        return dir * (aAmt - bAmt);
+      }
+      if (sortCol === 'start') return dir * ((a.startYear*100+a.startMonth) - (b.startYear*100+b.startMonth));
+      return 0;
+    });
 
   return (
     <div>
@@ -826,23 +942,39 @@ export default function ProjectsPage() {
         </button>
       </div>
 
+      {/* Proje Tipi Filtresi */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+        {PROJECT_TYPES.map(t => (
+          <button key={t.key} onClick={() => setTypeFilter(t.key)} style={{
+            padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+            border: '1px solid var(--border)', fontFamily: 'DM Sans, sans-serif',
+            background: typeFilter === t.key ? 'var(--accent)' : 'var(--bg-secondary)',
+            color: typeFilter === t.key ? '#fff' : 'var(--text-secondary)',
+          }}>{t.label} {typeFilter === t.key && `(${filteredProjects.length})`}</button>
+        ))}
+      </div>
+
       <div className="card">
         {loading ? (
           <div className="loading">Yükleniyor...</div>
-        ) : projects.length === 0 ? (
-          <div className="empty-state"><p>Henüz proje eklenmemiş.</p></div>
+        ) : filteredProjects.length === 0 ? (
+          <div className="empty-state"><p>Proje bulunamadı.</p></div>
         ) : (
           <div className="table-wrapper">
             <table>
               <thead>
                 <tr>
-                  <th>Proje Adı</th><th>Müşteri</th><th>Dönem</th>
-                  <th>Bütçe</th><th>Proje Tutarı</th><th>Proje Yöneticisi</th>
+                  <th onClick={() => handleSort('name')} style={{ cursor:'pointer' }}>Proje Adı <SortIcon col="name" /></th>
+                  <th onClick={() => handleSort('customer')} style={{ cursor:'pointer' }}>Müşteri <SortIcon col="customer" /></th>
+                  <th onClick={() => handleSort('start')} style={{ cursor:'pointer' }}>Dönem <SortIcon col="start" /></th>
+                  <th onClick={() => handleSort('budget')} style={{ cursor:'pointer' }}>Bütçe <SortIcon col="budget" /></th>
+                  <th onClick={() => handleSort('amount')} style={{ cursor:'pointer' }}>Proje Tutarı <SortIcon col="amount" /></th>
+                  <th>Proje Yöneticisi</th>
                   <th style={{ textAlign:'right' }}>İşlemler</th>
                 </tr>
               </thead>
               <tbody>
-                {projects.map(p => {
+                {filteredProjects.map(p => {
                   const projectAmount = (p.paymentPlan||[]).reduce((s,i) => s+(i.amount||0), 0);
                   return (
                     <tr key={p.id} onClick={() => setSelectedProject(p)} style={{ cursor:'pointer' }}>
