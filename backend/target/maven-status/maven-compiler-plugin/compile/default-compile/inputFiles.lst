@@ -1,4 +1,5 @@
 /Users/ulassancakli/IdeaProjects/planUS/backend/src/main/java/com/projectmanager/controller/SeniorityController.java
+/Users/ulassancakli/IdeaProjects/planUS/backend/src/main/java/com/projectmanager/repository/PotentialSaleRepository.java
 /Users/ulassancakli/IdeaProjects/planUS/backend/src/main/java/com/projectmanager/model/Product.java
 /Users/ulassancakli/IdeaProjects/planUS/backend/src/main/java/com/projectmanager/model/Seniority.java
 /Users/ulassancakli/IdeaProjects/planUS/backend/src/main/java/com/projectmanager/repository/ProductRepository.java
@@ -8,6 +9,7 @@
 /Users/ulassancakli/IdeaProjects/planUS/backend/src/main/java/com/projectmanager/model/User.java
 /Users/ulassancakli/IdeaProjects/planUS/backend/src/main/java/com/projectmanager/repository/ProjectRepository.java
 /Users/ulassancakli/IdeaProjects/planUS/backend/src/main/java/com/projectmanager/ProjectManagerApplication.java
+/Users/ulassancakli/IdeaProjects/planUS/backend/src/main/java/com/projectmanager/model/PotentialSale.java
 /Users/ulassancakli/IdeaProjects/planUS/backend/src/main/java/com/projectmanager/controller/PersonnelController.java
 /Users/ulassancakli/IdeaProjects/planUS/backend/src/main/java/com/projectmanager/model/Milestone.java
 /Users/ulassancakli/IdeaProjects/planUS/backend/src/main/java/com/projectmanager/service/ProjectService.java
@@ -19,6 +21,7 @@
 /Users/ulassancakli/IdeaProjects/planUS/backend/src/main/java/com/projectmanager/service/OrganizationService.java
 /Users/ulassancakli/IdeaProjects/planUS/backend/src/main/java/com/projectmanager/controller/AuthController.java
 /Users/ulassancakli/IdeaProjects/planUS/backend/src/main/java/com/projectmanager/model/SeniorityRate.java
+/Users/ulassancakli/IdeaProjects/planUS/backend/src/main/java/com/projectmanager/service/PotentialSaleService.java
 /Users/ulassancakli/IdeaProjects/planUS/backend/src/main/java/com/projectmanager/repository/PersonnelRepository.java
 /Users/ulassancakli/IdeaProjects/planUS/backend/src/main/java/com/projectmanager/repository/OrganizationUnitRepository.java
 /Users/ulassancakli/IdeaProjects/planUS/backend/src/main/java/com/projectmanager/security/JwtUtil.java
@@ -31,6 +34,7 @@
 /Users/ulassancakli/IdeaProjects/planUS/backend/src/main/java/com/projectmanager/model/Personnel.java
 /Users/ulassancakli/IdeaProjects/planUS/backend/src/main/java/com/projectmanager/controller/ProductController.java
 /Users/ulassancakli/IdeaProjects/planUS/backend/src/main/java/com/projectmanager/controller/UserController.java
+/Users/ulassancakli/IdeaProjects/planUS/backend/src/main/java/com/projectmanager/controller/PotentialSaleController.java
 /Users/ulassancakli/IdeaProjects/planUS/backend/src/main/java/com/projectmanager/repository/UserRepository.java
 /Users/ulassancakli/IdeaProjects/planUS/backend/src/main/java/com/projectmanager/controller/ProjectController.java
 /Users/ulassancakli/IdeaProjects/planUS/backend/src/main/java/com/projectmanager/model/PaymentItem.java

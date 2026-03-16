@@ -38,6 +38,14 @@ export const projectApi = {
   updateResourcePlan: (id, resourcePlan) => API.put(`/projects/${id}/resource-plan`, resourcePlan),
 };
 
+export const potentialSaleApi = {
+  getAll: () => API.get('/potential-sales'),
+  getByProject: (projectId) => API.get(`/potential-sales/project/${projectId}`),
+  create: (data) => API.post('/potential-sales', data),
+  update: (id, data) => API.put(`/potential-sales/${id}`, data),
+  delete: (id) => API.delete(`/potential-sales/${id}`),
+};
+
 export const organizationApi = {
   getAll: () => API.get('/organization'),
   getRoots: () => API.get('/organization/roots'),

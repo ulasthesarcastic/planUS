@@ -47,6 +47,7 @@ public class ProjectService {
             existing.setBudgetCurrency(updated.getBudgetCurrency());
             existing.setProjectManagerId(updated.getProjectManagerId());
             existing.setTechLeadId(updated.getTechLeadId());
+            existing.setUnitId(updated.getUnitId());
             return projectRepository.save(existing);
         });
     }

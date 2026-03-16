@@ -27,6 +27,7 @@ public class Project {
     private double potentialSales;
     private String projectManagerId;
     private String techLeadId;
+    private String unitId;
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "project_personnel", joinColumns = @JoinColumn(name = "project_id"))
@@ -85,6 +86,8 @@ public class Project {
     public void setProjectManagerId(String projectManagerId) { this.projectManagerId = projectManagerId; }
     public String getTechLeadId() { return techLeadId; }
     public void setTechLeadId(String techLeadId) { this.techLeadId = techLeadId; }
+    public String getUnitId() { return unitId; }
+    public void setUnitId(String unitId) { this.unitId = unitId; }
     public List<String> getPersonnelIds() { return personnelIds; }
     public void setPersonnelIds(List<String> personnelIds) { this.personnelIds = personnelIds; }
     public List<String> getProductIds() { return productIds; }

@@ -3,7 +3,6 @@ package com.projectmanager.controller;
 import com.projectmanager.model.User;
 import com.projectmanager.service.UserService;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;

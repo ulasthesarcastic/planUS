@@ -57,6 +57,7 @@ function MonthYearSelect({ month, year, onMonthChange, onYearChange, allowEmpty 
 // ── PROJE FORMU MODALI ──────────────────────────────────────────
 function ProjectModal({ project, personnel, onSave, onClose }) {
   const isEdit = !!project;
+  const [units, setUnits] = useState([]);
   const [form, setForm] = useState(project ? {
     name: project.name, customerName: project.customerName || '',
     startMonth: project.startMonth, startYear: project.startYear,
@@ -64,15 +65,26 @@ function ProjectModal({ project, personnel, onSave, onClose }) {
     budget: project.budget, budgetCurrency: project.budgetCurrency,
     projectManagerId: project.projectManagerId || '',
     techLeadId: project.techLeadId || '',
+    unitId: project.unitId || '',
+    projectType: project.projectType || 'MUSTERILI',
   } : {
     name: '', customerName: '',
     startMonth: new Date().getMonth()+1, startYear: currentYear,
     endMonth: new Date().getMonth()+1, endYear: currentYear+1,
-    budget: '', budgetCurrency: 'TL', projectManagerId: '', techLeadId: '',
+    budget: '', budgetCurrency: 'TRY', projectManagerId: '', techLeadId: '',
+    unitId: '', projectType: 'MUSTERILI',
   });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  useEffect(() => {
+    import('../../services/api').then(({ organizationApi }) => {
+      organizationApi.getAll().then(res => setUnits(res.data));
+    });
+  }, []);
+
+  const rootUnits = units.filter(u => !u.parentId);
 
   const handleSave = async () => {
     if (!form.name.trim()) return setError('Proje adı zorunludur.');
@@ -83,6 +95,7 @@ function ProjectModal({ project, personnel, onSave, onClose }) {
         budget: Number(form.budget) || 0,
         projectManagerId: form.projectManagerId || null,
         techLeadId: form.techLeadId || null,
+        unitId: form.unitId || null,
       };
       isEdit ? await projectApi.update(project.id, payload) : await projectApi.create(payload);
       onSave();
@@ -148,6 +161,13 @@ function ProjectModal({ project, personnel, onSave, onClose }) {
               {personnel.map(p => <option key={p.id} value={p.id}>{p.firstName} {p.lastName}</option>)}
             </select>
           </div>
+        </div>
+        <div className="form-group">
+          <label className="form-label">EMY (Üst Birim)</label>
+          <select className="form-select" value={form.unitId} onChange={e => set('unitId', e.target.value)}>
+            <option value="">— Seçilmedi —</option>
+            {rootUnits.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </select>
         </div>
         <div className="form-actions">
           <button className="btn btn-ghost" onClick={onClose}>İptal</button>
@@ -703,20 +723,29 @@ function ProductsTab({ project, allProducts, onUpdate }) {
 // ── TAB 5: BÜTÇE ────────────────────────────────────────────────
 function BudgetTab({ project, onUpdate }) {
   const [remainingBudget, setRemainingBudget] = useState(project.remainingBudget || 0);
-  const [potentialSales, setPotentialSales] = useState(project.potentialSales || 0);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [projectSales, setProjectSales] = useState([]);
 
   const fmt = (n) => (n||0).toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   const totalBudget = project.budget || 0;
   const currency = project.budgetCurrency || 'TRY';
+
+  useEffect(() => {
+    import('../../services/api').then(({ potentialSaleApi }) => {
+      potentialSaleApi.getByProject(project.id).then(res => setProjectSales(res.data));
+    });
+  }, [project.id]);
+
+  const activeSales = projectSales.filter(s => s.status === 'AKTIF');
+  const potentialTotal = activeSales.reduce((sum, s) => sum + (s.amount * s.probability / 100), 0);
 
   const handleSave = async () => {
     setSaving(true);
     try {
       await projectApi.updateBudget(project.id, {
         remainingBudget: parseFloat(remainingBudget) || 0,
-        potentialSales: parseFloat(potentialSales) || 0,
+        potentialSales: potentialTotal,
       });
       await onUpdate();
       setSaved(true);
@@ -724,11 +753,15 @@ function BudgetTab({ project, onUpdate }) {
     } finally { setSaving(false); }
   };
 
+  const STATUS_COLORS = { AKTIF: '#4f8ef7', KAZANILDI: '#34c97a', KAYBEDILDI: '#f05c5c' };
+  const STATUS_LABELS = { AKTIF: 'Aktif', KAZANILDI: 'Kazanıldı', KAYBEDILDI: 'Kaybedildi' };
+  const MONTHS = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
+
   return (
-    <div style={{ maxWidth: 520 }}>
+    <div style={{ maxWidth: 600 }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-        {/* Toplam Bütçe - readonly */}
+        {/* Toplam Bütçe */}
         <div style={{ padding: '16px 20px', background: 'var(--bg-secondary)', borderRadius: 10, border: '1px solid var(--border)' }}>
           <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--text-muted)', marginBottom: 6 }}>Toplam Bütçe</div>
           <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--accent)', fontFamily: 'DM Mono, monospace' }}>
@@ -737,7 +770,7 @@ function BudgetTab({ project, onUpdate }) {
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Proje bilgilerinden güncellenir</div>
         </div>
 
-        {/* Kalan Bütçe - düzenlenebilir */}
+        {/* Kalan Bütçe */}
         <div className="form-group">
           <label className="form-label">Kalan Bütçe ({currency})</label>
           <input className="form-input" type="number" value={remainingBudget}
@@ -748,15 +781,37 @@ function BudgetTab({ project, onUpdate }) {
           </div>
         </div>
 
-        {/* Potansiyel Satış - düzenlenebilir */}
-        <div className="form-group">
-          <label className="form-label">Potansiyel Satış ({currency})</label>
-          <input className="form-input" type="number" value={potentialSales}
-            onChange={e => setPotentialSales(e.target.value)}
-            placeholder="0" style={{ fontFamily: 'DM Mono, monospace' }} />
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-            Kesinleşmemiş ama beklenen gelir
+        {/* Potansiyel Satış - otomatik */}
+        <div style={{ padding: '16px 20px', background: 'var(--bg-secondary)', borderRadius: 10, border: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--text-muted)', marginBottom: 4 }}>Potansiyel Satış (Aktif)</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: '#34c97a', fontFamily: 'DM Mono, monospace' }}>
+                {fmt(potentialTotal)} <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{currency}</span>
+              </div>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'right' }}>
+              {activeSales.length} aktif fırsat<br/>
+              <a href="/sales" style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: 11 }}>Satışları yönet →</a>
+            </div>
           </div>
+          {activeSales.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+              {activeSales.map(s => (
+                <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>{s.name}</span>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>%{s.probability}</span>
+                    <span style={{ fontFamily: 'DM Mono, monospace', color: '#34c97a' }}>{fmt(s.amount * s.probability / 100)}</span>
+                    <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 10, background: `${STATUS_COLORS[s.status]}22`, color: STATUS_COLORS[s.status] }}>{MONTHS[s.targetMonth-1]} {s.targetYear}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {activeSales.length === 0 && (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Bu projeye bağlı aktif potansiyel satış yok.</div>
+          )}
         </div>
 
         <button className="btn btn-primary" onClick={handleSave} disabled={saving}

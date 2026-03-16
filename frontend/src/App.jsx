@@ -8,6 +8,7 @@ import ProjectsPage from './components/Projects/ProjectsPage';
 import PlanningPage from './components/Planning/PlanningPage';
 import ProductsPage from './components/Products/ProductsPage';
 import OrganizationPage from './components/Organization/OrganizationPage';
+import SalesPage from './components/Sales/SalesPage';
 import BudgetPage from './components/Budget/BudgetPage';
 import './styles/global.css';
 
@@ -34,6 +35,7 @@ function AppContent() {
           <Route path="/seniorities" element={<SenioritiesPage />} />
           <Route path="/personnel" element={<PersonnelPage />} />
           <Route path="/organization" element={<OrganizationPage />} />
+          <Route path="/sales" element={<SalesPage />} />
           <Route path="/budget" element={<BudgetPage />} />
         </Routes>
       </main>
