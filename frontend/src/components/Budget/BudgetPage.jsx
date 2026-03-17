@@ -184,7 +184,7 @@ export default function BudgetPage() {
     new Set(['plannedCost', 'plannedRevenue', 'plannedCashflow'])
   );
   const [activeTab, setActiveTab] = useState('grafik');
-  const [analysisMonth, setAnalysisMonth] = useState(currentMonth);
+  const [analysisMonth, setAnalysisMonth] = useState(currentMonth < 12 ? currentMonth + 1 : 12);
 
   useEffect(() => {
     Promise.all([projectApi.getAll(), personnelApi.getAll(), seniorityApi.getAll(), organizationApi.getAll()])
