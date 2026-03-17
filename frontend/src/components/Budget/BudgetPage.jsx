@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { projectApi, personnelApi, seniorityApi, organizationApi } from '../../services/api';
+import SearchableSelect from '../SearchableSelect';
 
 const MONTHS_SHORT = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
 const MONTHS_FULL  = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
@@ -185,6 +186,9 @@ export default function BudgetPage() {
   );
   const [activeTab, setActiveTab] = useState('grafik');
   const [analysisMonth, setAnalysisMonth] = useState(currentMonth < 12 ? currentMonth + 1 : 12);
+  const [collapsedGroups, setCollapsedGroups] = useState(new Set());
+  const [sortCol, setSortCol] = useState(null);   // 'name'|'plannedCost'|'remainingBudget'|'potentialSales'|'totalAvailable'|'diff'
+  const [sortDir, setSortDir] = useState('asc');  // 'asc'|'desc'
 
   useEffect(() => {
     Promise.all([projectApi.getAll(), personnelApi.getAll(), seniorityApi.getAll(), organizationApi.getAll()])
@@ -260,11 +264,16 @@ export default function BudgetPage() {
               ? availableYears.map(y => <option key={y} value={y}>{y}</option>)
               : <option value={currentYear}>{currentYear}</option>}
           </select>
-          <select className="form-select" style={{ width: 200 }}
-            value={selectedProjectId} onChange={e => setSelectedProjectId(e.target.value)}>
-            <option value="all">Tüm Projeler</option>
-            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
+          <SearchableSelect
+            style={{ width: 220 }}
+            value={selectedProjectId}
+            onChange={v => setSelectedProjectId(v)}
+            placeholder="Tüm Projeler"
+            options={[
+              { value: 'all', label: 'Tüm Projeler' },
+              ...projects.map(p => ({ value: String(p.id), label: p.name })),
+            ]}
+          />
         </div>
       </div>
 
@@ -283,9 +292,11 @@ export default function BudgetPage() {
 
       {activeTab === 'analiz' && (() => {
         const analysisYear = selectedYear;
-        // Müşterili ve Dış projeler
+
+        // Müşterili ve Dış projeler — proje filtresi de uygulanır
         const analysisProjects = projects.filter(p =>
-          p.projectType === 'MUSTERILI' || p.projectType === 'DIS'
+          (p.projectType === 'MUSTERILI' || p.projectType === 'DIS') &&
+          (selectedProjectId === 'all' || String(p.id) === String(selectedProjectId))
         );
 
         // Her proje için hesapla
@@ -296,25 +307,29 @@ export default function BudgetPage() {
             plannedCost += costs.planned[`${analysisYear}_${m}`] || 0;
           }
           const remainingBudget = project.remainingBudget || 0;
-          const potentialSales  = project.potentialSales || 0;
+          const potentialSales  = project.potentialSales  || 0;
           const totalAvailable  = remainingBudget + potentialSales;
           const diff = totalAvailable - plannedCost;
-          const status = remainingBudget === 0 && potentialSales === 0 ? '—'
-            : diff >= 0 ? 'Yeterli' : 'Açık';
+          const hasData = remainingBudget > 0 || potentialSales > 0;
+          const status = !hasData ? '—' : diff >= 0 ? 'Yeterli' : 'Açık';
 
+          // Eksiye düşüş — Toplam Pot. Kalan Bütçeye göre
           let eksiyeAy = null;
+          // Eksiye düşüş — Yalnızca Kalan Bütçeye göre
+          let eksiyeAyKalan = null;
           let cumCost = 0;
           for (let m = analysisMonth; m <= 12; m++) {
             cumCost += costs.planned[`${analysisYear}_${m}`] || 0;
-            if (cumCost > totalAvailable && !eksiyeAy) eksiyeAy = MONTHS_FULL[m - 1];
+            if (!eksiyeAy      && cumCost > totalAvailable)    eksiyeAy      = MONTHS_FULL[m - 1];
+            if (!eksiyeAyKalan && cumCost > remainingBudget)   eksiyeAyKalan = MONTHS_FULL[m - 1];
           }
-          return { project, plannedCost, remainingBudget, potentialSales, totalAvailable, diff, status, eksiyeAy };
+          return { project, plannedCost, remainingBudget, potentialSales, totalAvailable, diff, status, eksiyeAy, eksiyeAyKalan };
         });
 
-        // EMY bazında grupla (unitId → root org unit name)
+        // EMY bazında grupla
         const grouped = {};
         for (const row of rows) {
-          const unitId  = row.project.unitId || '__none__';
+          const unitId   = row.project.unitId || '__none__';
           const unitName = unitId === '__none__' ? 'EMY Atanmamış'
             : (orgMap[unitId]?.name || 'Bilinmeyen Birim');
           if (!grouped[unitId]) grouped[unitId] = { name: unitName, rows: [] };
@@ -323,18 +338,60 @@ export default function BudgetPage() {
         const groups = Object.entries(grouped).sort(([a], [b]) => {
           if (a === '__none__') return 1;
           if (b === '__none__') return -1;
-          return (grouped[a].name).localeCompare(grouped[b].name, 'tr');
+          return grouped[a].name.localeCompare(grouped[b].name, 'tr');
         });
 
+        // Sıralama yardımcısı
+        function sortedRows(groupRows) {
+          if (!sortCol) return groupRows;
+          return [...groupRows].sort((a, b) => {
+            let va, vb;
+            if (sortCol === 'name') { va = a.project.name; vb = b.project.name; }
+            else { va = a[sortCol] ?? 0; vb = b[sortCol] ?? 0; }
+            if (typeof va === 'string') return sortDir === 'asc' ? va.localeCompare(vb, 'tr') : vb.localeCompare(va, 'tr');
+            return sortDir === 'asc' ? va - vb : vb - va;
+          });
+        }
+
+        function toggleSort(col) {
+          if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+          else { setSortCol(col); setSortDir('asc'); }
+        }
+
+        function toggleGroup(unitId) {
+          setCollapsedGroups(prev => {
+            const next = new Set(prev);
+            next.has(unitId) ? next.delete(unitId) : next.add(unitId);
+            return next;
+          });
+        }
+
         const grandTotal = rows.reduce((acc, r) => ({
-          plannedCost:    acc.plannedCost    + r.plannedCost,
-          remainingBudget:acc.remainingBudget+ r.remainingBudget,
-          potentialSales: acc.potentialSales + r.potentialSales,
-          totalAvailable: acc.totalAvailable + r.totalAvailable,
-          diff:           acc.diff           + r.diff,
+          plannedCost:    acc.plannedCost     + r.plannedCost,
+          remainingBudget:acc.remainingBudget + r.remainingBudget,
+          potentialSales: acc.potentialSales  + r.potentialSales,
+          totalAvailable: acc.totalAvailable  + r.totalAvailable,
+          diff:           acc.diff            + r.diff,
         }), { plannedCost: 0, remainingBudget: 0, potentialSales: 0, totalAvailable: 0, diff: 0 });
 
         const monoR = { textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 13 };
+
+        // Sıralanabilir kolon başlığı
+        function SortTh({ col, label, align = 'right' }) {
+          const active = sortCol === col;
+          return (
+            <th onClick={() => toggleSort(col)} style={{
+              textAlign: align, cursor: 'pointer', userSelect: 'none',
+              whiteSpace: 'nowrap',
+              color: active ? 'var(--accent)' : undefined,
+            }}>
+              {label}{' '}
+              <span style={{ opacity: active ? 1 : 0.3, fontSize: 10 }}>
+                {active ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
+              </span>
+            </th>
+          );
+        }
 
         return (
           <div>
@@ -346,7 +403,7 @@ export default function BudgetPage() {
                 {MONTHS_FULL.map((m, i) => <option key={i+1} value={i+1}>{m}</option>)}
               </select>
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                {MONTHS_FULL[analysisMonth-1]} – Aralık {analysisYear} arası hesaplanır
+                {MONTHS_FULL[analysisMonth - 1]} – Aralık {analysisYear} arası hesaplanır
               </span>
             </div>
 
@@ -355,35 +412,46 @@ export default function BudgetPage() {
                 <table>
                   <thead>
                     <tr>
-                      <th>Proje</th>
-                      <th style={{ textAlign: 'right' }}>Planlanan Maliyet (₺)</th>
-                      <th style={{ textAlign: 'right' }}>Kalan Bütçe (₺)</th>
-                      <th style={{ textAlign: 'right' }}>Potansiyel Satış (₺)</th>
-                      <th style={{ textAlign: 'right' }}>Top. Pot. Kalan Bütçe (₺)</th>
-                      <th style={{ textAlign: 'right' }}>Fark (₺)</th>
+                      <SortTh col="name" label="Proje" align="left" />
+                      <SortTh col="plannedCost"     label="Planlanan Maliyet (₺)" />
+                      <SortTh col="remainingBudget" label="Kalan Bütçe (₺)" />
+                      <SortTh col="potentialSales"  label="Potansiyel Satış (₺)" />
+                      <SortTh col="totalAvailable"  label="Top. Pot. Kalan Bütçe (₺)" />
+                      <SortTh col="diff"            label="Fark (₺)" />
                       <th style={{ textAlign: 'center' }}>Durum</th>
-                      <th style={{ textAlign: 'center' }}>Eksiye Düşüş</th>
+                      <th style={{ textAlign: 'center' }}>Eksiye Düşüş (Pot.)</th>
+                      <th style={{ textAlign: 'center' }}>Eksiye Düşüş (Kalan)</th>
                     </tr>
                   </thead>
                   <tbody>
                     {groups.map(([unitId, group]) => {
+                      const collapsed = collapsedGroups.has(unitId);
                       const gTotal = group.rows.reduce((acc, r) => ({
-                        plannedCost:    acc.plannedCost    + r.plannedCost,
-                        remainingBudget:acc.remainingBudget+ r.remainingBudget,
-                        potentialSales: acc.potentialSales + r.potentialSales,
-                        totalAvailable: acc.totalAvailable + r.totalAvailable,
-                        diff:           acc.diff           + r.diff,
+                        plannedCost:    acc.plannedCost     + r.plannedCost,
+                        remainingBudget:acc.remainingBudget + r.remainingBudget,
+                        potentialSales: acc.potentialSales  + r.potentialSales,
+                        totalAvailable: acc.totalAvailable  + r.totalAvailable,
+                        diff:           acc.diff            + r.diff,
                       }), { plannedCost: 0, remainingBudget: 0, potentialSales: 0, totalAvailable: 0, diff: 0 });
 
                       return [
-                        // EMY grup başlığı
-                        <tr key={`grp-${unitId}`} style={{ background: 'var(--bg-hover)' }}>
-                          <td colSpan={8} style={{ fontWeight: 700, fontSize: 12, color: 'var(--accent)', padding: '8px 14px', letterSpacing: '0.4px', textTransform: 'uppercase' }}>
-                            ▸ {group.name}
+                        // EMY grup başlığı — tıklanabilir
+                        <tr key={`grp-${unitId}`}
+                          onClick={() => toggleGroup(unitId)}
+                          style={{ background: 'var(--bg-hover)', cursor: 'pointer' }}>
+                          <td colSpan={9} style={{
+                            fontWeight: 700, fontSize: 12, color: 'var(--accent)',
+                            padding: '8px 14px', letterSpacing: '0.4px', textTransform: 'uppercase',
+                          }}>
+                            {collapsed ? '▸' : '▾'} {group.name}
+                            <span style={{ marginLeft: 8, fontWeight: 400, opacity: 0.6, fontSize: 11 }}>
+                              ({group.rows.length} proje)
+                            </span>
                           </td>
                         </tr>,
-                        // Proje satırları
-                        ...group.rows.map(({ project, plannedCost, remainingBudget, potentialSales, totalAvailable, diff, status, eksiyeAy }) => (
+
+                        // Proje satırları (collapsed ise gösterme)
+                        ...(!collapsed ? sortedRows(group.rows).map(({ project, plannedCost, remainingBudget, potentialSales, totalAvailable, diff, status, eksiyeAy, eksiyeAyKalan }) => (
                           <tr key={project.id}>
                             <td style={{ paddingLeft: 24, fontWeight: 500 }}>{project.name}</td>
                             <td style={{ ...monoR }}>{plannedCost > 0 ? fmt(plannedCost) : '—'}</td>
@@ -401,14 +469,18 @@ export default function BudgetPage() {
                               }}>{status === 'Yeterli' ? '✓ Yeterli' : status === 'Açık' ? '✗ Açık' : '—'}</span>
                             </td>
                             <td style={{ textAlign: 'center', fontSize: 13, color: eksiyeAy ? 'var(--warning)' : status === 'Yeterli' ? 'var(--success)' : 'var(--text-muted)' }}>
-                              {eksiyeAy || (status === '—' ? '—' : status === 'Yeterli' ? '✓ Yok' : '—')}
+                              {eksiyeAy || (status === '—' ? '—' : '✓ Yok')}
+                            </td>
+                            <td style={{ textAlign: 'center', fontSize: 13, color: eksiyeAyKalan ? '#f05c5c' : remainingBudget > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
+                              {eksiyeAyKalan || (remainingBudget === 0 ? '—' : '✓ Yok')}
                             </td>
                           </tr>
-                        )),
-                        // Grup arası toplam
+                        )) : []),
+
+                        // Grup alt toplamı
                         <tr key={`grp-total-${unitId}`} style={{ background: 'var(--bg-secondary)', borderTop: '1px solid var(--border)' }}>
                           <td style={{ paddingLeft: 24, fontWeight: 600, fontSize: 12, color: 'var(--text-secondary)' }}>
-                            {group.name} Toplamı ({group.rows.length} proje)
+                            {group.name} Toplamı
                           </td>
                           <td style={{ ...monoR, fontWeight: 700 }}>{fmt(gTotal.plannedCost)}</td>
                           <td style={{ ...monoR, fontWeight: 700, color: 'var(--accent)' }}>{fmt(gTotal.remainingBudget)}</td>
@@ -417,7 +489,7 @@ export default function BudgetPage() {
                           <td style={{ ...monoR, fontWeight: 700, color: gTotal.diff >= 0 ? 'var(--success)' : 'var(--danger)' }}>
                             {gTotal.diff >= 0 ? '+' : ''}{fmt(gTotal.diff)}
                           </td>
-                          <td /><td />
+                          <td /><td /><td />
                         </tr>,
                       ];
                     })}
@@ -431,7 +503,7 @@ export default function BudgetPage() {
                       <td style={{ ...monoR, fontWeight: 700, color: grandTotal.diff >= 0 ? 'var(--success)' : 'var(--danger)' }}>
                         {grandTotal.diff >= 0 ? '+' : ''}{fmt(grandTotal.diff)}
                       </td>
-                      <td /><td />
+                      <td /><td /><td />
                     </tr>
                   </tbody>
                 </table>

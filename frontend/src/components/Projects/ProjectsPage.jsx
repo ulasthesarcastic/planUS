@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { projectApi, personnelApi, productApi } from '../../services/api';
+import SearchableSelect from '../SearchableSelect';
 
 const MONTHS = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran',
                  'Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
@@ -149,25 +150,43 @@ function ProjectModal({ project, personnel, onSave, onClose }) {
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">Proje Yöneticisi <span style={{color:'var(--text-muted)',fontWeight:400}}>(opsiyonel)</span></label>
-            <select className="form-select" value={form.projectManagerId} onChange={e => set('projectManagerId', e.target.value)}>
-              <option value="">— Seçilmedi —</option>
-              {personnel.map(p => <option key={p.id} value={p.id}>{p.firstName} {p.lastName}</option>)}
-            </select>
+            <SearchableSelect
+              value={form.projectManagerId || ''}
+              onChange={v => set('projectManagerId', v)}
+              placeholder="— Seçilmedi —"
+              style={{ width: '100%' }}
+              options={[
+                { value: '', label: '— Seçilmedi —' },
+                ...personnel.map(p => ({ value: String(p.id), label: `${p.firstName} ${p.lastName}` })),
+              ]}
+            />
           </div>
           <div className="form-group">
             <label className="form-label">Teknik Lider <span style={{color:'var(--text-muted)',fontWeight:400}}>(opsiyonel)</span></label>
-            <select className="form-select" value={form.techLeadId} onChange={e => set('techLeadId', e.target.value)}>
-              <option value="">— Seçilmedi —</option>
-              {personnel.map(p => <option key={p.id} value={p.id}>{p.firstName} {p.lastName}</option>)}
-            </select>
+            <SearchableSelect
+              value={form.techLeadId || ''}
+              onChange={v => set('techLeadId', v)}
+              placeholder="— Seçilmedi —"
+              style={{ width: '100%' }}
+              options={[
+                { value: '', label: '— Seçilmedi —' },
+                ...personnel.map(p => ({ value: String(p.id), label: `${p.firstName} ${p.lastName}` })),
+              ]}
+            />
           </div>
         </div>
         <div className="form-group">
           <label className="form-label">EMY (Üst Birim)</label>
-          <select className="form-select" value={form.unitId} onChange={e => set('unitId', e.target.value)}>
-            <option value="">— Seçilmedi —</option>
-            {rootUnits.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-          </select>
+          <SearchableSelect
+            value={form.unitId || ''}
+            onChange={v => set('unitId', v)}
+            placeholder="— Seçilmedi —"
+            style={{ width: '100%' }}
+            options={[
+              { value: '', label: '— Seçilmedi —' },
+              ...rootUnits.map(u => ({ value: String(u.id), label: u.name })),
+            ]}
+          />
         </div>
         <div className="form-actions">
           <button className="btn btn-ghost" onClick={onClose}>İptal</button>
