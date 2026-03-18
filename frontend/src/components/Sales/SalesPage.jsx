@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { potentialSaleApi, projectApi } from '../../services/api';
+import SearchableSelect from '../SearchableSelect';
 
 const MONTHS = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
 const fmt = (n) => (n||0).toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -61,10 +62,16 @@ function SaleModal({ sale, projects, onSave, onClose }) {
 
         <div className="form-group">
           <label className="form-label">Proje</label>
-          <select className="form-select" value={form.projectId} onChange={e => setForm(f => ({ ...f, projectId: e.target.value }))}>
-            <option value="">— Seçin —</option>
-            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
+          <SearchableSelect
+            value={form.projectId || ''}
+            onChange={v => setForm(f => ({ ...f, projectId: v }))}
+            placeholder="— Seçin —"
+            style={{ width: '100%' }}
+            options={[
+              { value: '', label: '— Seçin —' },
+              ...projects.map(p => ({ value: String(p.id), label: p.name })),
+            ]}
+          />
         </div>
 
         <div className="form-row">

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { personnelApi, seniorityApi, organizationApi } from '../../services/api';
+import SearchableSelect from '../SearchableSelect';
 
 function EditIcon() {
   return <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
@@ -87,27 +88,41 @@ function PersonnelModal({ personnel, seniorities, units, onSave, onClose }) {
 
         <div className="form-group">
           <label className="form-label">Kıdem</label>
-          <select className="form-select" value={form.seniorityId}
-            onChange={e => setForm({ ...form, seniorityId: e.target.value })}>
-            {seniorities.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
+          <SearchableSelect
+            value={form.seniorityId || ''}
+            onChange={v => setForm({ ...form, seniorityId: v })}
+            placeholder="— Seçin —"
+            style={{ width: '100%' }}
+            options={seniorities.map(s => ({ value: String(s.id), label: s.name }))}
+          />
         </div>
 
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">1. Seviye Birim</label>
-            <select className="form-select" value={selectedRoot} onChange={e => handleRootChange(e.target.value)}>
-              <option value="">— Seçin —</option>
-              {roots.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-            </select>
+            <SearchableSelect
+              value={selectedRoot || ''}
+              onChange={v => handleRootChange(v)}
+              placeholder="— Seçin —"
+              style={{ width: '100%' }}
+              options={[
+                { value: '', label: '— Seçin —' },
+                ...roots.map(r => ({ value: String(r.id), label: r.name })),
+              ]}
+            />
           </div>
           <div className="form-group">
             <label className="form-label">2. Seviye Birim</label>
-            <select className="form-select" value={form.unitId === selectedRoot ? '' : form.unitId}
-              onChange={e => handleChildChange(e.target.value)} disabled={!selectedRoot || children.length === 0}>
-              <option value="">— Seçin —</option>
-              {children.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <SearchableSelect
+              value={(form.unitId === selectedRoot ? '' : form.unitId) || ''}
+              onChange={v => handleChildChange(v)}
+              placeholder="— Seçin —"
+              style={{ width: '100%', opacity: !selectedRoot || children.length === 0 ? 0.5 : 1, pointerEvents: !selectedRoot || children.length === 0 ? 'none' : 'auto' }}
+              options={[
+                { value: '', label: '— Seçin —' },
+                ...children.map(c => ({ value: String(c.id), label: c.name })),
+              ]}
+            />
           </div>
         </div>
 

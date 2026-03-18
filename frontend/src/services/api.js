@@ -62,3 +62,10 @@ export const productApi = {
   update: (id, data) => API.put(`/products/${id}`, data),
   delete: (id) => API.delete(`/products/${id}`),
 };
+
+export const projectTypeApi = {
+  getAll: () => API.get('/project-types'),
+  create: (data) => API.post('/project-types', data),
+  update: (id, data) => API.put(`/project-types/${id}`, data),
+  delete: (id) => API.delete(`/project-types/${id}`),
+};
