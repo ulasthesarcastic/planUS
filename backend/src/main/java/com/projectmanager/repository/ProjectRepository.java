@@ -3,4 +3,6 @@ package com.projectmanager.repository;
 import com.projectmanager.model.Project;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface ProjectRepository extends JpaRepository<Project, String> {}
+public interface ProjectRepository extends JpaRepository<Project, String> {
+    boolean existsByProjectType(String projectType);
+}
