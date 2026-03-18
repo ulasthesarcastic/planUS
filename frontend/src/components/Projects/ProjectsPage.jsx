@@ -506,8 +506,8 @@ function PlanningTab({ project, allPersonnel, units, seniorities, onReload }) {
                     <td colSpan={months.length * 3} style={{ background: 'rgba(255,255,255,0.06)', borderTop: '2px solid var(--border)', borderBottom: '1px solid var(--border)' }} />
                   </tr>,
                   ...grp.people.map((person, pi) => (
-                    <tr key={person.id} style={{ borderBottom: '1px solid var(--border)', background: pi % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
-                      <td style={{ padding: '3px 12px', position: 'sticky', left: 0, zIndex: 1, background: pi % 2 === 0 ? 'var(--bg-card)' : '#1e2130', borderRight: '2px solid var(--border)', whiteSpace: 'nowrap' }}>
+                    <tr key={person.id} style={{ borderBottom: '1px solid var(--border)', background: pi % 2 === 0 ? 'transparent' : 'var(--bg-hover)' }}>
+                      <td style={{ padding: '3px 12px', position: 'sticky', left: 0, zIndex: 1, background: pi % 2 === 0 ? 'var(--bg-card)' : 'var(--bg-alt-row)', borderRight: '2px solid var(--border)', whiteSpace: 'nowrap' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                           <span style={{ fontWeight: 500, fontSize: 12, color: grp.nameColor }}>{person.firstName} {person.lastName}</span>
                           <button onClick={() => setBulkPerson(person)} title="Toplu atama"
@@ -618,28 +618,34 @@ function ProjectCard({ project, personnel, personnelMap, seniorityMap, onClick, 
         </div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px' }}>
+        {mgr && (
+          <div style={{ fontSize: 11 }}>
+            <span style={{ color: 'var(--text-secondary)' }}>Proje Yöneticisi: </span>
+            <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{mgr.firstName} {mgr.lastName}</span>
+          </div>
+        )}
         {project.customerName && (
           <div style={{ fontSize: 11 }}>
             <span style={{ color: 'var(--text-secondary)' }}>Müşteri: </span>
             <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{project.customerName}</span>
           </div>
         )}
-        <div style={{ fontSize: 11 }}>
-          <span style={{ color: 'var(--text-secondary)' }}>Proje Yöneticisi: </span>
-          <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{mgr ? `${mgr.firstName} ${mgr.lastName}` : '—'}</span>
-        </div>
-        <div style={{ fontSize: 11 }}>
-          <span style={{ color: 'var(--text-secondary)' }}>Bütçe: </span>
-          <span style={{ color: '#34d399', fontWeight: 600, fontFamily: 'DM Mono, monospace' }}>{fmtBudget(project.budget)}</span>
-        </div>
+        {project.budget != null && (
+          <div style={{ fontSize: 11 }}>
+            <span style={{ color: 'var(--text-secondary)' }}>Bütçe: </span>
+            <span style={{ color: '#34d399', fontWeight: 600, fontFamily: 'DM Mono, monospace' }}>{fmtBudget(project.budget)}</span>
+          </div>
+        )}
         <div style={{ fontSize: 11 }}>
           <span style={{ color: 'var(--text-secondary)' }}>Kalan: </span>
           <span style={{ color: '#f97316', fontWeight: 600, fontFamily: 'DM Mono, monospace' }}>{fmtBudget(project.remainingBudget)}</span>
         </div>
-        <div style={{ fontSize: 11 }}>
-          <span style={{ color: 'var(--text-secondary)' }}>Potansiyel: </span>
-          <span style={{ color: '#22c55e', fontWeight: 600, fontFamily: 'DM Mono, monospace' }}>{fmtBudget(project.potentialSales || 0)}</span>
-        </div>
+        {project.potentialSales > 0 && (
+          <div style={{ fontSize: 11 }}>
+            <span style={{ color: 'var(--text-secondary)' }}>Potansiyel: </span>
+            <span style={{ color: '#22c55e', fontWeight: 600, fontFamily: 'DM Mono, monospace' }}>{fmtBudget(project.potentialSales)}</span>
+          </div>
+        )}
         <div style={{ fontSize: 11 }}>
           <span style={{ color: 'var(--text-secondary)' }}>Dönem: </span>
           <span style={{ color: 'var(--text-primary)' }}>{MONTHS_SHORT[project.startMonth-1]} {project.startYear} – {MONTHS_SHORT[project.endMonth-1]} {project.endYear}</span>

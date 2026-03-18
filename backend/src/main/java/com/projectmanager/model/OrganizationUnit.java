@@ -12,8 +12,9 @@ public class OrganizationUnit {
     @Column(nullable = false)
     private String name;
 
-    // null ise üst birim, dolu ise alt birim
     private String parentId;
+
+    private String managerId;
 
     public OrganizationUnit() { this.id = UUID.randomUUID().toString(); }
 
@@ -23,4 +24,6 @@ public class OrganizationUnit {
     public void setName(String name) { this.name = name; }
     public String getParentId() { return parentId; }
     public void setParentId(String parentId) { this.parentId = parentId; }
+    public String getManagerId() { return managerId; }
+    public void setManagerId(String managerId) { this.managerId = managerId; }
 }

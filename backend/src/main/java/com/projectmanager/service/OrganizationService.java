@@ -36,6 +36,7 @@ public class OrganizationService {
         return repo.findById(id).map(existing -> {
             existing.setName(updated.getName());
             existing.setParentId(updated.getParentId());
+            existing.setManagerId(updated.getManagerId());
             return repo.save(existing);
         });
     }
