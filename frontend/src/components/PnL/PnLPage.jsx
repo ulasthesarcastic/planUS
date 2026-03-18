@@ -120,7 +120,7 @@ function aggPnL(projects, personnelMap, seniorityMap, potentialSales) {
   for (const p of projects) {
     const md = calcProjectPnL(p, personnelMap, seniorityMap, potentialSales);
     for (const [key, val] of Object.entries(md)) {
-      if (!agg[key]) agg[key] = { ...val, salesBreakdown: [] };
+      if (!agg[key]) agg[key] = { ...val };  // salesBreakdown dahil ilk projeyi koru
       else {
         agg[key].gider            += val.gider;
         agg[key].sozlesmeli       += val.sozlesmeli;
