@@ -95,6 +95,9 @@ function analyzeBudget(project, personnelMap, seniorityMap) {
     if (entry.planned == null) continue;
     if (entry.year < analysisYear || (entry.year === analysisYear && entry.month < analysisMonth)) continue;
     if (entry.year > analysisYear) continue;
+    const afterStart = (entry.year > project.startYear) || (entry.year === project.startYear && entry.month >= project.startMonth);
+    const beforeEnd  = (entry.year < project.endYear)   || (entry.year === project.endYear   && entry.month <= project.endMonth);
+    if (!afterStart || !beforeEnd) continue;
     const person = personnelMap[String(entry.personnelId)];
     if (!person) continue;
     const seniority = seniorityMap[String(person.seniorityId)];

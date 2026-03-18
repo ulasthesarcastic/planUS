@@ -29,6 +29,10 @@ function getRateForMonth(rates, year, month) {
 function calcProjectMonthlyCosts(project, personnelMap, seniorityMap) {
   const planned = {}, actual = {};
   for (const entry of (project.resourcePlan || [])) {
+    // Proje tarih aralığı dışındaki girdileri atla
+    const afterStart = (entry.year > project.startYear) || (entry.year === project.startYear && entry.month >= project.startMonth);
+    const beforeEnd  = (entry.year < project.endYear)   || (entry.year === project.endYear   && entry.month <= project.endMonth);
+    if (!afterStart || !beforeEnd) continue;
     const person   = personnelMap[entry.personnelId];
     if (!person) continue;
     const seniority = seniorityMap[person.seniorityId];
