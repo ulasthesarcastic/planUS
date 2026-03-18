@@ -107,11 +107,14 @@ export default function Sidebar() {
 
             <div className="sidebar-section">
               {!collapsed && <div className="sidebar-section-label">Finans</div>}
-              <NavLink to="/sales" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Potansiyel Satışlar">
-                <Icons.DollarSign />{!collapsed && <span className="nav-item-label">Potansiyel Satışlar</span>}
+              <NavLink to="/pnl" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="P&L">
+                <Icons.TrendUp />{!collapsed && <span className="nav-item-label">P&amp;L</span>}
               </NavLink>
               <NavLink to="/budget" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Bütçe Yönetimi">
-                <Icons.TrendUp />{!collapsed && <span className="nav-item-label">Bütçe Yönetimi</span>}
+                <Icons.DollarSign />{!collapsed && <span className="nav-item-label">Bütçe Yönetimi</span>}
+              </NavLink>
+              <NavLink to="/sales" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Potansiyel Satışlar">
+                <Icons.Box />{!collapsed && <span className="nav-item-label">Potansiyel Satışlar</span>}
               </NavLink>
             </div>
           </>

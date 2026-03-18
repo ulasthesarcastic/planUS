@@ -184,7 +184,7 @@ export default function BudgetPage() {
   const [activeMetrics,  setActiveMetrics]  = useState(
     new Set(['plannedCost', 'plannedRevenue', 'plannedCashflow'])
   );
-  const [activeTab, setActiveTab] = useState('grafik');
+  const [activeTab, setActiveTab] = useState('analiz');
   const [analysisMonth, setAnalysisMonth] = useState(currentMonth < 12 ? currentMonth + 1 : 12);
   const [collapsedGroups, setCollapsedGroups] = useState(new Set());
   const [sortCol, setSortCol] = useState(null);   // 'name'|'plannedCost'|'remainingBudget'|'potentialSales'|'totalAvailable'|'diff'
@@ -279,7 +279,7 @@ export default function BudgetPage() {
 
       {/* SEKME NAVİGASYONU */}
       <div style={{ display: 'flex', gap: 2, marginBottom: 20, borderBottom: '1px solid var(--border)' }}>
-        {[['grafik', 'Grafik & Özet'], ['analiz', 'Bütçe Analizi']].map(([id, label]) => (
+        {[['analiz', 'Bütçe Analizi'], ['grafik', 'Grafik & Özet']].map(([id, label]) => (
           <button key={id} onClick={() => setActiveTab(id)} style={{
             padding: '9px 18px', fontSize: 13, fontWeight: activeTab === id ? 600 : 400,
             color: activeTab === id ? 'var(--accent)' : 'var(--text-secondary)',
