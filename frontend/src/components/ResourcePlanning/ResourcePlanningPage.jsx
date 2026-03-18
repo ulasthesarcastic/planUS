@@ -36,7 +36,7 @@ function ManagerModal({ unit, personnel, onSave, onClose }) {
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal" style={{ maxWidth: 420 }}>
         <div className="modal-header">
-          <div className="modal-title">{unit.name} — Yönetici</div>
+          <div className="modal-title">{unit.name} </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 18 }}>✕</button>
         </div>
         {error && <div className="alert alert-error">{error}</div>}
