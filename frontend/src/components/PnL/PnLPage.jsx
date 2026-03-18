@@ -51,7 +51,8 @@ function calcProjectPnL(project, personnelMap, seniorityMap, potentialSales) {
     project.endYear,   project.endMonth,
   );
   const hasPayments = (project.paymentPlan || []).some(i => i.amount > 0);
-  const monthlyBudget = hasPayments ? 0 : (project.budget || 0) / (months.length || 1);
+  const effectiveBudget = project.remainingBudget || project.budget || 0;
+  const monthlyBudget = hasPayments ? 0 : effectiveBudget / (months.length || 1);
 
   const result = {};
   for (const { year, month } of months) {
