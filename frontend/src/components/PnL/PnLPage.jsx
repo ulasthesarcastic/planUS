@@ -29,11 +29,7 @@ function monthsBetween(sy, sm, ey, em) {
 
 function fmtK(val) {
   if (val == null) return '—';
-  const abs = Math.abs(val);
-  const sign = val < 0 ? '-' : '';
-  if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(1)}M ₺`;
-  if (abs >= 1_000)     return `${sign}${Math.round(abs / 1_000)}K ₺`;
-  return `${sign}${Math.round(abs)} ₺`;
+  return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(val);
 }
 
 // Pozitif = kâr → yeşil, negatif = zarar → kırmızı
