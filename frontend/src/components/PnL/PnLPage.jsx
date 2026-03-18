@@ -1,7 +1,11 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { projectApi, personnelApi, seniorityApi, potentialSaleApi } from '../../services/api';
 
-// ── Yardımcı ─────────────────────────────────────────────────────────────────
+// ── Sabitler & Yardımcılar ────────────────────────────────────────────────────
+
+const MONTHS_SHORT = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
+const COL_W   = 96;
+const LABEL_W = 224;
 
 function getRateForMonth(rates = [], year, month) {
   for (const r of rates) {
@@ -27,56 +31,64 @@ function fmtK(val) {
   const abs = Math.abs(val);
   const sign = val < 0 ? '-' : '';
   if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(1)}M ₺`;
-  if (abs >= 1_000)     return `${sign}${(abs / 1_000).toFixed(0)}K ₺`;
-  return `${sign}${abs.toFixed(0)} ₺`;
+  if (abs >= 1_000)     return `${sign}${Math.round(abs / 1_000)}K ₺`;
+  return `${sign}${Math.round(abs)} ₺`;
 }
 
-const MONTHS_SHORT = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
+function valColor(val) {
+  if (val < -0.5) return '#22c55e';
+  if (val >  0.5) return '#ef4444';
+  return 'var(--text-muted)';
+}
 
 // ── Hesaplama ─────────────────────────────────────────────────────────────────
 
 function calcProjectPnL(project, personnelMap, seniorityMap, potentialSales) {
   const months = monthsBetween(
     project.startYear, project.startMonth,
-    project.endYear,   project.endMonth
+    project.endYear,   project.endMonth,
   );
+  const hasPayments = (project.paymentPlan || []).some(i => i.amount > 0);
+  // Ödeme adımı yoksa bütçeyi aylara eşit dağıt
+  const monthlyBudget = hasPayments ? 0 : (project.budget || 0) / (months.length || 1);
 
   const result = {};
   for (const { year, month } of months) {
     const key = `${year}_${month}`;
-    // Planlanan Gider: planned (0–1 fraction) × aylık kıdem ücreti
+
+    // Planlanan Gider: planned × aylık kıdem ücreti
     let gider = 0;
     for (const entry of (project.resourcePlan || [])) {
       if (entry.year !== year || entry.month !== month) continue;
       if (entry.planned == null) continue;
-      const person = personnelMap[String(entry.personnelId)];
+      const person   = personnelMap[String(entry.personnelId)];
       if (!person) continue;
       const seniority = seniorityMap[String(person.seniorityId)];
       if (!seniority) continue;
-      const rate = getRateForMonth(seniority.rates, year, month);
-      gider += rate * entry.planned;
+      gider += getRateForMonth(seniority.rates, year, month) * entry.planned;
     }
 
-    // Sözleşmeli Planlanan Gelir: payment_plan'daki planlanan ödemeler
-    let sozlesmeli = 0;
-    for (const item of (project.paymentPlan || [])) {
-      if (item.plannedYear === year && item.plannedMonth === month) {
-        sozlesmeli += item.amount || 0;
+    // Sözleşmeli Planlanan Gelir
+    let sozlesmeli = hasPayments ? 0 : monthlyBudget;
+    if (hasPayments) {
+      for (const item of (project.paymentPlan || [])) {
+        if (item.plannedYear === year && item.plannedMonth === month)
+          sozlesmeli += item.amount || 0;
       }
     }
 
-    // Potansiyel Gelir: targetYear/targetMonth eşleşen aktif satışlar
+    // Potansiyel Gelir
     let potansiyel = 0;
     for (const sale of potentialSales) {
       if (sale.status !== 'AKTIF') continue;
       if (String(sale.projectId) !== String(project.id)) continue;
-      if (sale.targetYear === year && sale.targetMonth === month) {
-        potansiyel += (sale.amount * sale.probability / 100);
-      }
+      if (sale.targetYear === year && sale.targetMonth === month)
+        potansiyel += sale.amount * sale.probability / 100;
     }
 
-    result[key] = { year, month, gider, sozlesmeli, potansiyel,
-      toplam: gider - sozlesmeli,
+    result[key] = {
+      year, month, gider, sozlesmeli, potansiyel,
+      toplam:           gider - sozlesmeli,
       toplamPotansiyel: gider - sozlesmeli - potansiyel,
     };
   }
@@ -86,181 +98,145 @@ function calcProjectPnL(project, personnelMap, seniorityMap, potentialSales) {
 function sumPnL(monthlyMap) {
   let gider = 0, sozlesmeli = 0, potansiyel = 0;
   for (const v of Object.values(monthlyMap)) {
-    gider       += v.gider;
-    sozlesmeli  += v.sozlesmeli;
-    potansiyel  += v.potansiyel;
+    gider      += v.gider;
+    sozlesmeli += v.sozlesmeli;
+    potansiyel += v.potansiyel;
   }
   return { gider, sozlesmeli, potansiyel,
-    toplam: gider - sozlesmeli,
+    toplam:           gider - sozlesmeli,
     toplamPotansiyel: gider - sozlesmeli - potansiyel,
   };
 }
 
-// ── Monthly Grid ──────────────────────────────────────────────────────────────
+function aggPnL(projects, personnelMap, seniorityMap, potentialSales) {
+  const agg = {};
+  for (const p of projects) {
+    const md = calcProjectPnL(p, personnelMap, seniorityMap, potentialSales);
+    for (const [key, val] of Object.entries(md)) {
+      if (!agg[key]) agg[key] = { ...val };
+      else {
+        agg[key].gider            += val.gider;
+        agg[key].sozlesmeli       += val.sozlesmeli;
+        agg[key].potansiyel       += val.potansiyel;
+        agg[key].toplam           += val.toplam;
+        agg[key].toplamPotansiyel += val.toplamPotansiyel;
+      }
+    }
+  }
+  return agg;
+}
+
+// ── Grid (sticky başlıklar, mevcut aya odak) ──────────────────────────────────
+
+const ROWS = [
+  { key: 'gider',            label: 'Planlanan Gider',            bold: false, color: null },
+  { key: 'potansiyel',       label: 'Potansiyel Gelir',           bold: false, color: 'var(--accent)' },
+  { key: 'sozlesmeli',       label: 'Sözleşmeli Planlanan Gelir', bold: false, color: '#22c55e' },
+  { key: 'toplam',           label: 'Toplam',                     bold: true,  color: 'dynamic' },
+  { key: 'toplamPotansiyel', label: 'Toplam Potansiyel',          bold: true,  color: 'dynamic' },
+];
 
 function MonthlyGrid({ monthlyData }) {
+  const scrollRef = useRef(null);
+  const now = new Date();
+  const curYear = now.getFullYear(), curMonth = now.getMonth() + 1;
+
   const months = Object.values(monthlyData).sort((a, b) =>
     a.year !== b.year ? a.year - b.year : a.month - b.month
   );
 
-  const COL_W = 90;
-  const LABEL_W = 220;
-  const rowStyle = (i) => ({
-    display: 'flex', borderBottom: '1px solid var(--border)',
-    background: i % 2 === 0 ? 'transparent' : 'var(--bg-alt-row)',
-  });
-  const cellStyle = (bold, color) => ({
-    minWidth: COL_W, width: COL_W, padding: '5px 8px',
-    fontSize: 12, textAlign: 'right', flexShrink: 0,
-    fontWeight: bold ? 600 : 400,
-    color: color || 'var(--text-primary)',
-  });
-  const labelStyle = {
-    minWidth: LABEL_W, width: LABEL_W, padding: '5px 10px',
-    fontSize: 12, color: 'var(--text-secondary)', flexShrink: 0,
-  };
-
-  const rows = [
-    { key: 'gider',            label: 'Planlanan Gider',             bold: false, color: null },
-    { key: 'potansiyel',       label: 'Potansiyel Gelir',            bold: false, color: 'var(--accent)' },
-    { key: 'sozlesmeli',       label: 'Sözleşmeli Planlanan Gelir',  bold: false, color: '#22c55e' },
-    { key: 'toplam',           label: 'Toplam',                      bold: true,  color: null },
-    { key: 'toplamPotansiyel', label: 'Toplam Potansiyel',           bold: true,  color: null },
-  ];
+  // Mevcut aya scroll
+  useEffect(() => {
+    if (!scrollRef.current) return;
+    const idx = months.findIndex(m => m.year === curYear && m.month === curMonth);
+    if (idx < 0) return;
+    const offset = LABEL_W + idx * COL_W - 120;
+    scrollRef.current.scrollLeft = Math.max(0, offset);
+  }, []);  // eslint-disable-line
 
   return (
-    <div style={{ overflowX: 'auto', marginTop: 12 }}>
-      {/* Header */}
-      <div style={{ display: 'flex', borderBottom: '2px solid var(--border)', background: 'var(--bg-secondary)' }}>
-        <div style={{ ...labelStyle, fontWeight: 600, color: 'var(--text-primary)' }}>Kalem</div>
-        {months.map(({ year, month }) => (
-          <div key={`${year}_${month}`} style={{ ...cellStyle(true), textAlign: 'center', color: 'var(--text-secondary)' }}>
-            {MONTHS_SHORT[month - 1]} {String(year).slice(2)}
-          </div>
-        ))}
-      </div>
+    <div ref={scrollRef} style={{ overflowX: 'auto', position: 'relative' }}>
+      <div style={{ display: 'inline-block', minWidth: '100%' }}>
 
-      {rows.map(({ key, label, bold, color }, i) => (
-        <div key={key} style={rowStyle(i)}>
-          <div style={labelStyle}>{label}</div>
+        {/* Sticky header */}
+        <div style={{
+          display: 'flex', position: 'sticky', top: 0, zIndex: 4,
+          background: 'var(--bg-secondary)',
+          borderBottom: '2px solid var(--border)',
+        }}>
+          <div style={{
+            minWidth: LABEL_W, width: LABEL_W, padding: '6px 12px',
+            fontSize: 12, fontWeight: 600, color: 'var(--text-primary)',
+            position: 'sticky', left: 0, zIndex: 5,
+            background: 'var(--bg-secondary)', borderRight: '1px solid var(--border)',
+          }}>
+            Kalem
+          </div>
           {months.map(({ year, month }) => {
-            const d = monthlyData[`${year}_${month}`];
-            const val = d ? d[key] : 0;
-            const isNeg = val < 0;
-            const displayColor = key === 'toplam' || key === 'toplamPotansiyel'
-              ? (isNeg ? '#22c55e' : val > 0 ? '#ef4444' : 'var(--text-muted)')
-              : color;
+            const isCur = year === curYear && month === curMonth;
             return (
-              <div key={`${year}_${month}`} style={cellStyle(bold, displayColor)}>
-                {val !== 0 ? fmtK(val) : '—'}
+              <div key={`${year}_${month}`} style={{
+                minWidth: COL_W, width: COL_W, padding: '6px 4px',
+                fontSize: 11, textAlign: 'center', flexShrink: 0,
+                fontWeight: isCur ? 700 : 400,
+                color: isCur ? 'var(--accent)' : 'var(--text-secondary)',
+                background: isCur ? 'var(--accent-dim)' : 'transparent',
+                borderLeft: isCur ? '2px solid var(--accent)' : '1px solid transparent',
+              }}>
+                {MONTHS_SHORT[month - 1]} {String(year).slice(2)}
               </div>
             );
           })}
         </div>
-      ))}
-    </div>
-  );
-}
 
-// ── Proje Kartı ───────────────────────────────────────────────────────────────
-
-function ProjectPnLCard({ project, personnelMap, seniorityMap, potentialSales }) {
-  const [open, setOpen] = useState(false);
-  const monthlyData = useMemo(
-    () => calcProjectPnL(project, personnelMap, seniorityMap, potentialSales),
-    [project, personnelMap, seniorityMap, potentialSales]
-  );
-  const totals = useMemo(() => sumPnL(monthlyData), [monthlyData]);
-
-  const toplam = totals.toplam;
-  const toplamPot = totals.toplamPotansiyel;
-
-  return (
-    <div style={{
-      borderRadius: 8, border: '1px solid var(--border)',
-      background: 'var(--bg-card)', overflow: 'hidden',
-      transition: 'box-shadow 0.15s',
-    }}>
-      {/* Card header — tıklanabilir */}
-      <div
-        onClick={() => setOpen(o => !o)}
-        style={{
-          padding: '14px 16px', cursor: 'pointer', display: 'flex',
-          alignItems: 'flex-start', justifyContent: 'space-between', gap: 12,
-        }}
-        onMouseEnter={e => e.currentTarget.parentElement.style.boxShadow = '0 2px 14px rgba(99,102,241,0.12)'}
-        onMouseLeave={e => e.currentTarget.parentElement.style.boxShadow = 'none'}
-      >
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', marginBottom: 2 }}>
-            {project.name}
-          </div>
-          {project.customerName && (
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>
-              {project.customerName}
+        {/* Rows */}
+        {ROWS.map(({ key, label, bold, color }, ri) => (
+          <div key={key} style={{
+            display: 'flex',
+            background: ri % 2 === 0 ? 'transparent' : 'var(--bg-alt-row)',
+            borderBottom: '1px solid var(--border)',
+          }}>
+            {/* Sticky label */}
+            <div style={{
+              minWidth: LABEL_W, width: LABEL_W, padding: '5px 12px',
+              fontSize: 12, color: 'var(--text-secondary)', flexShrink: 0,
+              position: 'sticky', left: 0, zIndex: 2,
+              background: ri % 2 === 0 ? 'var(--bg-card)' : 'var(--bg-alt-row)',
+              borderRight: '1px solid var(--border)',
+            }}>
+              {label}
             </div>
-          )}
-          <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-            {MONTHS_SHORT[project.startMonth - 1]} {project.startYear} – {MONTHS_SHORT[project.endMonth - 1]} {project.endYear}
+            {months.map(({ year, month }) => {
+              const isCur = year === curYear && month === curMonth;
+              const d   = monthlyData[`${year}_${month}`];
+              const val = d ? d[key] : 0;
+              const c   = color === 'dynamic' ? valColor(val) : (color || 'var(--text-primary)');
+              return (
+                <div key={`${year}_${month}`} style={{
+                  minWidth: COL_W, width: COL_W, padding: '5px 8px',
+                  fontSize: 12, textAlign: 'right', flexShrink: 0,
+                  fontWeight: bold ? 600 : 400, color: c,
+                  background: isCur ? 'var(--accent-dim)' : 'transparent',
+                  borderLeft: isCur ? '2px solid var(--accent)' : 'none',
+                }}>
+                  {val !== 0 ? fmtK(val) : '—'}
+                </div>
+              );
+            })}
           </div>
-        </div>
-
-        {/* Totals */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-          <div style={{ fontSize: 11 }}>
-            <span style={{ color: 'var(--text-secondary)' }}>Toplam: </span>
-            <span style={{
-              fontWeight: 600,
-              color: toplam < 0 ? '#22c55e' : toplam > 0 ? '#ef4444' : 'var(--text-muted)'
-            }}>
-              {fmtK(toplam)}
-            </span>
-          </div>
-          <div style={{ fontSize: 11 }}>
-            <span style={{ color: 'var(--text-secondary)' }}>Toplam Potansiyel: </span>
-            <span style={{
-              fontWeight: 600,
-              color: toplamPot < 0 ? '#22c55e' : toplamPot > 0 ? '#ef4444' : 'var(--text-muted)'
-            }}>
-              {fmtK(toplamPot)}
-            </span>
-          </div>
-          <div style={{ marginTop: 4, color: 'var(--text-muted)', fontSize: 12 }}>
-            {open ? '▲' : '▼'}
-          </div>
-        </div>
+        ))}
       </div>
-
-      {/* Monthly detail */}
-      {open && (
-        <div style={{ borderTop: '1px solid var(--border)', padding: '0 16px 16px' }}>
-          <MonthlyGrid monthlyData={monthlyData} />
-        </div>
-      )}
     </div>
   );
 }
 
-// ── Özet Kartı ────────────────────────────────────────────────────────────────
+// ── Özet Kartı (inline expand) ────────────────────────────────────────────────
 
 function SummaryCard({ label, projects, personnelMap, seniorityMap, potentialSales }) {
   const [open, setOpen] = useState(false);
 
   const { totals, monthlyAgg } = useMemo(() => {
-    const agg = {};
-    for (const p of projects) {
-      const md = calcProjectPnL(p, personnelMap, seniorityMap, potentialSales);
-      for (const [key, val] of Object.entries(md)) {
-        if (!agg[key]) agg[key] = { ...val };
-        else {
-          agg[key].gider            += val.gider;
-          agg[key].sozlesmeli       += val.sozlesmeli;
-          agg[key].potansiyel       += val.potansiyel;
-          agg[key].toplam           += val.toplam;
-          agg[key].toplamPotansiyel += val.toplamPotansiyel;
-        }
-      }
-    }
+    const agg = aggPnL(projects, personnelMap, seniorityMap, potentialSales);
     return { totals: sumPnL(agg), monthlyAgg: agg };
   }, [projects, personnelMap, seniorityMap, potentialSales]);
 
@@ -269,25 +245,25 @@ function SummaryCard({ label, projects, personnelMap, seniorityMap, potentialSal
       borderRadius: 8, border: '2px solid var(--accent)',
       background: 'var(--bg-card)', overflow: 'hidden', marginBottom: 8,
     }}>
-      <div
-        onClick={() => setOpen(o => !o)}
-        style={{ padding: '14px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}
-      >
+      <div onClick={() => setOpen(o => !o)} style={{
+        padding: '12px 16px', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+      }}>
         <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--accent)' }}>{label}</div>
-        <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
-          <div style={{ fontSize: 12 }}>
+        <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
+          <span style={{ fontSize: 12 }}>
             <span style={{ color: 'var(--text-secondary)' }}>Toplam: </span>
-            <span style={{ fontWeight: 700, color: totals.toplam < 0 ? '#22c55e' : '#ef4444' }}>{fmtK(totals.toplam)}</span>
-          </div>
-          <div style={{ fontSize: 12 }}>
-            <span style={{ color: 'var(--text-secondary)' }}>Toplam Potansiyel: </span>
-            <span style={{ fontWeight: 700, color: totals.toplamPotansiyel < 0 ? '#22c55e' : '#ef4444' }}>{fmtK(totals.toplamPotansiyel)}</span>
-          </div>
-          <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{open ? '▲' : '▼'}</span>
+            <span style={{ fontWeight: 700, color: valColor(totals.toplam) }}>{fmtK(totals.toplam)}</span>
+          </span>
+          <span style={{ fontSize: 12 }}>
+            <span style={{ color: 'var(--text-secondary)' }}>Toplam Pot.: </span>
+            <span style={{ fontWeight: 700, color: valColor(totals.toplamPotansiyel) }}>{fmtK(totals.toplamPotansiyel)}</span>
+          </span>
+          <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{open ? '▲' : '▼'}</span>
         </div>
       </div>
       {open && (
-        <div style={{ borderTop: '1px solid var(--border)', padding: '0 16px 16px' }}>
+        <div style={{ borderTop: '1px solid var(--border)' }}>
           <MonthlyGrid monthlyData={monthlyAgg} />
         </div>
       )}
@@ -295,7 +271,114 @@ function SummaryCard({ label, projects, personnelMap, seniorityMap, potentialSal
   );
 }
 
-// ── Ana Sayfa ─────────────────────────────────────────────────────────────────
+// ── Proje Kartı (list görünümü) ───────────────────────────────────────────────
+
+function ProjectCard({ project, totals, onClick }) {
+  const [hov, setHov] = useState(false);
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        padding: '12px 16px', borderRadius: 8, cursor: 'pointer',
+        border: `1px solid ${hov ? 'var(--accent)' : 'var(--border)'}`,
+        background: 'var(--bg-card)',
+        boxShadow: hov ? '0 2px 14px rgba(99,102,241,0.10)' : 'none',
+        transition: 'border-color 0.15s, box-shadow 0.15s',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+      }}
+    >
+      <div style={{ flex: 1 }}>
+        <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>{project.name}</div>
+        {project.customerName && (
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{project.customerName}</div>
+        )}
+        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 3 }}>
+          {MONTHS_SHORT[project.startMonth - 1]} {project.startYear} – {MONTHS_SHORT[project.endMonth - 1]} {project.endYear}
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
+        <div style={{ fontSize: 11 }}>
+          <span style={{ color: 'var(--text-secondary)' }}>Toplam: </span>
+          <span style={{ fontWeight: 600, color: valColor(totals.toplam) }}>{fmtK(totals.toplam)}</span>
+        </div>
+        <div style={{ fontSize: 11 }}>
+          <span style={{ color: 'var(--text-secondary)' }}>Top. Pot.: </span>
+          <span style={{ fontWeight: 600, color: valColor(totals.toplamPotansiyel) }}>{fmtK(totals.toplamPotansiyel)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Proje Detay Görünümü ──────────────────────────────────────────────────────
+
+function ProjectDetail({ project, personnelMap, seniorityMap, potentialSales, onBack }) {
+  const monthlyData = useMemo(
+    () => calcProjectPnL(project, personnelMap, seniorityMap, potentialSales),
+    [project, personnelMap, seniorityMap, potentialSales],
+  );
+  const totals = useMemo(() => sumPnL(monthlyData), [monthlyData]);
+
+  return (
+    <div>
+      <div className="page-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button className="btn btn-ghost" onClick={onBack} style={{ padding: '6px 10px' }}>← Geri</button>
+          <div>
+            <div className="page-title">{project.name}</div>
+            {project.customerName && (
+              <div className="page-subtitle">{project.customerName}</div>
+            )}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 24 }}>
+          <div style={{ fontSize: 13 }}>
+            <span style={{ color: 'var(--text-secondary)' }}>Toplam: </span>
+            <span style={{ fontWeight: 700, color: valColor(totals.toplam) }}>{fmtK(totals.toplam)}</span>
+          </div>
+          <div style={{ fontSize: 13 }}>
+            <span style={{ color: 'var(--text-secondary)' }}>Toplam Pot.: </span>
+            <span style={{ fontWeight: 700, color: valColor(totals.toplamPotansiyel) }}>{fmtK(totals.toplamPotansiyel)}</span>
+          </div>
+        </div>
+      </div>
+      <div style={{ borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-card)', overflow: 'hidden' }}>
+        <MonthlyGrid monthlyData={monthlyData} />
+      </div>
+    </div>
+  );
+}
+
+// ── Liste Görünümü ────────────────────────────────────────────────────────────
+
+function GroupSection({ title, projects, allTotals, onSelect }) {
+  if (projects.length === 0) return null;
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{
+        fontSize: 11, fontWeight: 600, color: 'var(--text-muted)',
+        letterSpacing: '0.06em', textTransform: 'uppercase',
+        marginBottom: 8, paddingLeft: 2,
+      }}>
+        {title} ({projects.length})
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {projects.map(p => (
+          <ProjectCard
+            key={p.id}
+            project={p}
+            totals={allTotals[p.id]}
+            onClick={() => onSelect(p)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Ana Bileşen ───────────────────────────────────────────────────────────────
 
 export default function PnLPage() {
   const [projects, setProjects]       = useState([]);
@@ -303,6 +386,7 @@ export default function PnLPage() {
   const [seniorities, setSeniorities] = useState([]);
   const [potSales, setPotSales]       = useState([]);
   const [loading, setLoading]         = useState(true);
+  const [selected, setSelected]       = useState(null);
 
   useEffect(() => {
     Promise.all([
@@ -319,56 +403,62 @@ export default function PnLPage() {
     });
   }, []);
 
-  const personnelMap  = useMemo(() => Object.fromEntries(personnel.map(p => [p.id, p])), [personnel]);
-  const seniorityMap  = useMemo(() => Object.fromEntries(seniorities.map(s => [s.id, s])), [seniorities]);
+  const personnelMap = useMemo(() => Object.fromEntries(personnel.map(p => [p.id, p])), [personnel]);
+  const seniorityMap = useMemo(() => Object.fromEntries(seniorities.map(s => [s.id, s])), [seniorities]);
 
-  // Sadece müşterili projeler
+  // Tüm projelerin toplam P&L — kart listesi için
+  const allTotals = useMemo(() => {
+    const map = {};
+    for (const p of projects) {
+      map[p.id] = sumPnL(calcProjectPnL(p, personnelMap, seniorityMap, potSales));
+    }
+    return map;
+  }, [projects, personnelMap, seniorityMap, potSales]);
+
   const customerProjects = useMemo(
-    () => projects.filter(p => p.customerName?.trim()),
-    [projects]
+    () => projects.filter(p => p.customerName?.trim()).sort((a, b) => a.name.localeCompare(b.name, 'tr')),
+    [projects],
+  );
+  const divisionProjects = useMemo(
+    () => projects.filter(p => !p.customerName?.trim()).sort((a, b) => a.name.localeCompare(b.name, 'tr')),
+    [projects],
   );
 
-  // SGE toplamı: tüm projeler
-  const allProjects = projects;
-
   if (loading) return <div className="loading">Yükleniyor...</div>;
+
+  // Detay görünümü
+  if (selected) {
+    return (
+      <ProjectDetail
+        project={selected}
+        personnelMap={personnelMap}
+        seniorityMap={seniorityMap}
+        potentialSales={potSales}
+        onBack={() => setSelected(null)}
+      />
+    );
+  }
 
   return (
     <div>
       <div className="page-header">
         <div>
           <div className="page-title">P&amp;L</div>
-          <div className="page-subtitle">{customerProjects.length} müşterili proje</div>
+          <div className="page-subtitle">{customerProjects.length} müşterili · {divisionProjects.length} bölüm projesi</div>
         </div>
       </div>
 
       {/* Özet kartları */}
-      <SummaryCard
-        label="Müşterili Projeler Toplamı"
-        projects={customerProjects}
-        personnelMap={personnelMap}
-        seniorityMap={seniorityMap}
-        potentialSales={potSales}
-      />
-      <SummaryCard
-        label="SGE Toplamı (Tüm Projeler)"
-        projects={allProjects}
-        personnelMap={personnelMap}
-        seniorityMap={seniorityMap}
-        potentialSales={potSales}
-      />
+      <SummaryCard label="Müşterili Projeler Toplamı" projects={customerProjects}
+        personnelMap={personnelMap} seniorityMap={seniorityMap} potentialSales={potSales} />
+      <SummaryCard label="SGE Toplamı (Tüm Projeler)" projects={projects}
+        personnelMap={personnelMap} seniorityMap={seniorityMap} potentialSales={potSales} />
 
-      {/* Proje kartları */}
-      <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {customerProjects.map(p => (
-          <ProjectPnLCard
-            key={p.id}
-            project={p}
-            personnelMap={personnelMap}
-            seniorityMap={seniorityMap}
-            potentialSales={potSales}
-          />
-        ))}
+      <div style={{ marginTop: 20 }}>
+        <GroupSection title="Müşterili Projeler" projects={customerProjects}
+          allTotals={allTotals} onSelect={setSelected} />
+        <GroupSection title="Bölüm Projeleri" projects={divisionProjects}
+          allTotals={allTotals} onSelect={setSelected} />
       </div>
     </div>
   );
