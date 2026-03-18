@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { projectApi, personnelApi, productApi, organizationApi, seniorityApi, potentialSaleApi } from '../../services/api';
+import { useAuth } from '../../auth/AuthContext';
+import { projectApi, personnelApi, productApi, organizationApi, seniorityApi, potentialSaleApi, projectTypeApi } from '../../services/api';
 import SearchableSelect from '../SearchableSelect';
 
 const MONTHS = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran',
@@ -42,13 +43,6 @@ function XIcon() { return <svg width="16" height="16" fill="none" stroke="curren
 function ArrowIcon() { return <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>; }
 
 const MONTHS_SHORT = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
-const PROJECT_TYPE_TABS = [
-  { key: 'MUSTERILI',     label: 'Müşterili'     },
-  { key: 'BOLUM',         label: 'Bölüm'         },
-  { key: 'DIS',           label: 'Dış'           },
-  { key: 'IS_GELISTIRME', label: 'İş Geliştirme' },
-  { key: 'ALL',           label: 'Tümü'          },
-];
 
 function fmtBudget(v) {
   if (v == null) return '—';
@@ -696,7 +690,7 @@ function MonthYearSelect({ month, year, onMonthChange, onYearChange, allowEmpty 
 }
 
 // ── PROJE FORMU MODALI ──────────────────────────────────────────
-function ProjectModal({ project, personnel, onSave, onClose }) {
+function ProjectModal({ project, personnel, projectTypes = [], onSave, onClose }) {
   const isEdit = !!project;
   const [units, setUnits] = useState([]);
   const [form, setForm] = useState(project ? {
@@ -707,13 +701,13 @@ function ProjectModal({ project, personnel, onSave, onClose }) {
     projectManagerId: project.projectManagerId || '',
     techLeadId: project.techLeadId || '',
     unitId: project.unitId || '',
-    projectType: project.projectType || 'MUSTERILI',
+    projectType: project.projectType || '',
   } : {
     name: '', customerName: '',
     startMonth: new Date().getMonth()+1, startYear: currentYear,
     endMonth: new Date().getMonth()+1, endYear: currentYear+1,
     budget: '', budgetCurrency: 'TRY', projectManagerId: '', techLeadId: '',
-    unitId: '', projectType: 'MUSTERILI',
+    unitId: '', projectType: '',
   });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -761,6 +755,19 @@ function ProjectModal({ project, personnel, onSave, onClose }) {
             <label className="form-label">Müşteri Adı</label>
             <input className="form-input" placeholder="Müşteri adı" value={form.customerName} onChange={e => set('customerName', e.target.value)} />
           </div>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Proje Tipi</label>
+          <SearchableSelect
+            value={form.projectType || ''}
+            onChange={v => set('projectType', v)}
+            placeholder="— Seçilmedi —"
+            style={{ width: '100%' }}
+            options={[
+              { value: '', label: '— Seçilmedi —' },
+              ...projectTypes.map(t => ({ value: t.id, label: t.name })),
+            ]}
+          />
         </div>
         <div className="form-row" style={{ marginBottom: 16 }}>
           <div>
@@ -1547,18 +1554,22 @@ function ProjectDetail({ project, allPersonnel, allProducts, units, seniorities,
 
 // ── ANA SAYFA ────────────────────────────────────────────────────
 export default function ProjectsPage() {
+  const { user } = useAuth();
+  const filterKey = user ? `projects_filter_${user.username}` : 'projects_filter';
+
   const [projects, setProjects] = useState([]);
   const [personnel, setPersonnel] = useState([]);
   const [products, setProducts] = useState([]);
   const [units, setUnits] = useState([]);
   const [seniorities, setSeniorities] = useState([]);
   const [potentialSalesAll, setPotentialSalesAll] = useState([]);
+  const [projectTypes, setProjectTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedProject, setSelectedProject] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
-  const [typeFilter, setTypeFilter] = useState('MUSTERILI');
+  const [typeFilter, setTypeFilter] = useState(() => localStorage.getItem(filterKey) || 'ALL');
 
   const location = useLocation();
 
@@ -1580,6 +1591,7 @@ export default function ProjectsPage() {
     setUnits(uRes.data);
     setSeniorities(sRes.data);
     setPotentialSalesAll(psRes.data);
+    projectTypeApi.getAll().then(ptRes => setProjectTypes(ptRes.data)).catch(() => {});
     setLoading(false);
   };
 
@@ -1621,7 +1633,7 @@ export default function ProjectsPage() {
           onUpdate={refreshSelected}
         />
         {modalOpen && (
-          <ProjectModal project={editing} personnel={personnel}
+          <ProjectModal project={editing} personnel={personnel} projectTypes={projectTypes}
             onSave={() => { setModalOpen(false); refreshSelected(); }}
             onClose={() => setModalOpen(false)} />
         )}
@@ -1641,15 +1653,16 @@ export default function ProjectsPage() {
   const enrichedProjects = projects.map(p => ({ ...p, potentialSales: potentialMap[String(p.id)] || 0 }));
 
   const counts = Object.fromEntries(
-    ['MUSTERILI','BOLUM','DIS','IS_GELISTIRME'].map(k => [k, enrichedProjects.filter(p => p.projectType === k).length])
+    projectTypes.map(t => [t.id, enrichedProjects.filter(p => p.projectType === t.id).length])
   );
   counts.ALL = enrichedProjects.length;
 
   const filtered = typeFilter === 'ALL' ? enrichedProjects : enrichedProjects.filter(p => p.projectType === typeFilter);
   const unitMap  = Object.fromEntries(units.map(u => [String(u.id), u]));
 
+  const selectedTypeName = projectTypes.find(t => t.id === typeFilter)?.name?.toLowerCase() || '';
   const renderProjectCards = () => {
-    if (typeFilter === 'MUSTERILI') {
+    if (selectedTypeName === 'müşterili') {
       const groups = {};
       for (const p of filtered) {
         const eid = String(p.unitId || '__none__');
@@ -1707,14 +1720,14 @@ export default function ProjectsPage() {
       </div>
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
-        {PROJECT_TYPE_TABS.map(t => (
-          <button key={t.key} onClick={() => setTypeFilter(t.key)} style={{
+        {[...projectTypes.map(t => ({ id: t.id, label: t.name })), { id: 'ALL', label: 'Tümü' }].map(t => (
+          <button key={t.id} onClick={() => { setTypeFilter(t.id); localStorage.setItem(filterKey, t.id); }} style={{
             padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
             border: '1px solid var(--border)', fontFamily: 'DM Sans, sans-serif',
-            background: typeFilter === t.key ? 'var(--accent)' : 'var(--bg-secondary)',
-            color: typeFilter === t.key ? '#fff' : 'var(--text-secondary)',
+            background: typeFilter === t.id ? 'var(--accent)' : 'var(--bg-secondary)',
+            color: typeFilter === t.id ? '#fff' : 'var(--text-secondary)',
           }}>
-            {t.label} ({counts[t.key] ?? 0})
+            {t.label} ({counts[t.id] ?? 0})
           </button>
         ))}
       </div>
@@ -1727,7 +1740,7 @@ export default function ProjectsPage() {
       }
 
       {modalOpen && (
-        <ProjectModal project={editing} personnel={personnel}
+        <ProjectModal project={editing} personnel={personnel} projectTypes={projectTypes}
           onSave={() => { setModalOpen(false); load(); if (selectedProject) refreshSelected(); }}
           onClose={() => setModalOpen(false)} />
       )}

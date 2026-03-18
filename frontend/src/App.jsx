@@ -12,6 +12,7 @@ import SalesPage from './components/Sales/SalesPage';
 import BudgetPage from './components/Budget/BudgetPage';
 import ResourcePlanningPage from './components/ResourcePlanning/ResourcePlanningPage';
 import PnLPage from './components/PnL/PnLPage';
+import ProjectTypesPage from './components/ProjectTypes/ProjectTypesPage';
 import './styles/global.css';
 
 function UserIcon() {
@@ -212,6 +213,7 @@ function AppContent() {
             <Route path="/organization" element={<OrganizationPage />} />
             <Route path="/resource-planning" element={<ResourcePlanningPage />} />
             <Route path="/pnl" element={<PnLPage />} />
+            <Route path="/project-types" element={<ProjectTypesPage />} />
             <Route path="/sales" element={<SalesPage />} />
             <Route path="/budget" element={<BudgetPage />} />
           </Routes>

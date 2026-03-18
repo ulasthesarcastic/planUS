@@ -17,7 +17,7 @@ const Icons = {
   Grid:     () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>,
 };
 
-const SETTINGS_ROUTES = ['/seniorities', '/personnel', '/organization'];
+const SETTINGS_ROUTES = ['/seniorities', '/personnel', '/organization', '/project-types'];
 
 export default function Sidebar() {
   const location = useLocation();
@@ -72,6 +72,11 @@ export default function Sidebar() {
               {!collapsed && <span>Geri Dön</span>}
             </button>
             {!collapsed && <div className="sidebar-section-label">Ayarlar</div>}
+            {!collapsed && <div className="sidebar-section-label">Projeler</div>}
+            <NavLink to="/project-types" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Proje Tipleri">
+              <Icons.Folder />{!collapsed && <span className="nav-item-label">Proje Tipleri</span>}
+            </NavLink>
+            {!collapsed && <div className="sidebar-section-label" style={{ marginTop: 8 }}>Kaynaklar</div>}
             <NavLink to="/seniorities" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Kıdem Yönetimi">
               <Icons.Award />{!collapsed && <span className="nav-item-label">Kıdem Yönetimi</span>}
             </NavLink>

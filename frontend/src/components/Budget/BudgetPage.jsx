@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { projectApi, personnelApi, seniorityApi, organizationApi } from '../../services/api';
+import { projectApi, personnelApi, seniorityApi, organizationApi, projectTypeApi } from '../../services/api';
 import SearchableSelect from '../SearchableSelect';
 
 const MONTHS_SHORT = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
@@ -189,6 +189,7 @@ export default function BudgetPage() {
   const [collapsedGroups, setCollapsedGroups] = useState(new Set());
   const [sortCol, setSortCol] = useState(null);   // 'name'|'plannedCost'|'remainingBudget'|'potentialSales'|'totalAvailable'|'diff'
   const [sortDir, setSortDir] = useState('asc');  // 'asc'|'desc'
+  const [projectTypes, setProjectTypes] = useState([]);
 
   useEffect(() => {
     Promise.all([projectApi.getAll(), personnelApi.getAll(), seniorityApi.getAll(), organizationApi.getAll()])
@@ -199,6 +200,7 @@ export default function BudgetPage() {
         setOrgUnits(orgRes.data);
       })
       .finally(() => setLoading(false));
+    projectTypeApi.getAll().then(r => setProjectTypes(r.data)).catch(() => {});
   }, []);
 
   const personnelMap   = useMemo(() => Object.fromEntries(personnelList.map(p => [p.id, p])), [personnelList]);
@@ -294,8 +296,13 @@ export default function BudgetPage() {
         const analysisYear = selectedYear;
 
         // Müşterili ve Dış projeler — proje filtresi de uygulanır
+        const analysisTypeIds = new Set(
+          projectTypes
+            .filter(t => ['müşterili', 'dış'].includes(t.name.toLowerCase()))
+            .map(t => t.id)
+        );
         const analysisProjects = projects.filter(p =>
-          (p.projectType === 'MUSTERILI' || p.projectType === 'DIS') &&
+          (analysisTypeIds.size === 0 || analysisTypeIds.has(p.projectType)) &&
           (selectedProjectId === 'all' || String(p.id) === String(selectedProjectId))
         );
 
