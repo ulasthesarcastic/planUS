@@ -35,9 +35,10 @@ function fmtK(val) {
   return `${sign}${Math.round(abs)} ₺`;
 }
 
+// Pozitif = kâr → yeşil, negatif = zarar → kırmızı
 function valColor(val) {
-  if (val < -0.5) return '#22c55e';
-  if (val >  0.5) return '#ef4444';
+  if (val >  0.5) return '#22c55e';
+  if (val < -0.5) return '#ef4444';
   return 'var(--text-muted)';
 }
 
@@ -49,19 +50,18 @@ function calcProjectPnL(project, personnelMap, seniorityMap, potentialSales) {
     project.endYear,   project.endMonth,
   );
   const hasPayments = (project.paymentPlan || []).some(i => i.amount > 0);
-  // Ödeme adımı yoksa bütçeyi aylara eşit dağıt
   const monthlyBudget = hasPayments ? 0 : (project.budget || 0) / (months.length || 1);
 
   const result = {};
   for (const { year, month } of months) {
     const key = `${year}_${month}`;
 
-    // Planlanan Gider: planned × aylık kıdem ücreti
+    // Planlanan Gider
     let gider = 0;
     for (const entry of (project.resourcePlan || [])) {
       if (entry.year !== year || entry.month !== month) continue;
       if (entry.planned == null) continue;
-      const person   = personnelMap[String(entry.personnelId)];
+      const person    = personnelMap[String(entry.personnelId)];
       if (!person) continue;
       const seniority = seniorityMap[String(person.seniorityId)];
       if (!seniority) continue;
@@ -77,19 +77,25 @@ function calcProjectPnL(project, personnelMap, seniorityMap, potentialSales) {
       }
     }
 
-    // Potansiyel Gelir
+    // Potansiyel Gelir + kırılım
     let potansiyel = 0;
+    const salesBreakdown = [];
     for (const sale of potentialSales) {
       if (sale.status !== 'AKTIF') continue;
       if (String(sale.projectId) !== String(project.id)) continue;
-      if (sale.targetYear === year && sale.targetMonth === month)
-        potansiyel += sale.amount * sale.probability / 100;
+      if (sale.targetYear === year && sale.targetMonth === month) {
+        const est = sale.amount * sale.probability / 100;
+        potansiyel += est;
+        salesBreakdown.push({ id: sale.id, name: sale.name, amount: est, probability: sale.probability });
+      }
     }
 
     result[key] = {
       year, month, gider, sozlesmeli, potansiyel,
-      toplam:           gider - sozlesmeli,
-      toplamPotansiyel: gider - sozlesmeli - potansiyel,
+      salesBreakdown,
+      // Düzeltilmiş formüller: gelir - gider (pozitif = kâr)
+      toplam:           sozlesmeli - gider,
+      toplamPotansiyel: sozlesmeli + potansiyel - gider,
     };
   }
   return result;
@@ -102,9 +108,10 @@ function sumPnL(monthlyMap) {
     sozlesmeli += v.sozlesmeli;
     potansiyel += v.potansiyel;
   }
-  return { gider, sozlesmeli, potansiyel,
-    toplam:           gider - sozlesmeli,
-    toplamPotansiyel: gider - sozlesmeli - potansiyel,
+  return {
+    gider, sozlesmeli, potansiyel,
+    toplam:           sozlesmeli - gider,
+    toplamPotansiyel: sozlesmeli + potansiyel - gider,
   };
 }
 
@@ -113,46 +120,73 @@ function aggPnL(projects, personnelMap, seniorityMap, potentialSales) {
   for (const p of projects) {
     const md = calcProjectPnL(p, personnelMap, seniorityMap, potentialSales);
     for (const [key, val] of Object.entries(md)) {
-      if (!agg[key]) agg[key] = { ...val };
+      if (!agg[key]) agg[key] = { ...val, salesBreakdown: [] };
       else {
         agg[key].gider            += val.gider;
         agg[key].sozlesmeli       += val.sozlesmeli;
         agg[key].potansiyel       += val.potansiyel;
         agg[key].toplam           += val.toplam;
         agg[key].toplamPotansiyel += val.toplamPotansiyel;
+        agg[key].salesBreakdown   = agg[key].salesBreakdown.concat(val.salesBreakdown);
       }
     }
   }
   return agg;
 }
 
-// ── Grid (sticky başlıklar, mevcut aya odak) ──────────────────────────────────
+// ── Grid ──────────────────────────────────────────────────────────────────────
 
 const ROWS = [
-  { key: 'gider',            label: 'Planlanan Gider',            bold: false, color: null },
-  { key: 'potansiyel',       label: 'Potansiyel Gelir',           bold: false, color: 'var(--accent)' },
-  { key: 'sozlesmeli',       label: 'Sözleşmeli Planlanan Gelir', bold: false, color: '#22c55e' },
-  { key: 'toplam',           label: 'Toplam',                     bold: true,  color: 'dynamic' },
-  { key: 'toplamPotansiyel', label: 'Toplam Potansiyel',          bold: true,  color: 'dynamic' },
+  { key: 'gider',            label: 'Planlanan Gider',            bold: false, color: null,      expandable: false },
+  { key: 'potansiyel',       label: 'Potansiyel Gelir',           bold: false, color: 'var(--accent)', expandable: true },
+  { key: 'sozlesmeli',       label: 'Sözleşmeli Planlanan Gelir', bold: false, color: '#22c55e', expandable: false },
+  { key: 'toplam',           label: 'Toplam',                     bold: true,  color: 'dynamic', expandable: false },
+  { key: 'toplamPotansiyel', label: 'Toplam Potansiyel',          bold: true,  color: 'dynamic', expandable: false },
 ];
 
 function MonthlyGrid({ monthlyData }) {
   const scrollRef = useRef(null);
+  const [potOpen, setPotOpen] = useState(false);
   const now = new Date();
   const curYear = now.getFullYear(), curMonth = now.getMonth() + 1;
 
   const months = Object.values(monthlyData).sort((a, b) =>
-    a.year !== b.year ? a.year - b.year : a.month - b.month
+    a.year !== b.year ? a.year - b.year : a.month - b.month,
   );
 
-  // Mevcut aya scroll
   useEffect(() => {
     if (!scrollRef.current) return;
     const idx = months.findIndex(m => m.year === curYear && m.month === curMonth);
     if (idx < 0) return;
-    const offset = LABEL_W + idx * COL_W - 120;
-    scrollRef.current.scrollLeft = Math.max(0, offset);
-  }, []);  // eslint-disable-line
+    scrollRef.current.scrollLeft = Math.max(0, LABEL_W + idx * COL_W - 120);
+  }, []); // eslint-disable-line
+
+  // Tüm aylardaki tüm benzersiz satışlar
+  const allSales = useMemo(() => {
+    const map = {};
+    for (const m of months) {
+      for (const s of (monthlyData[`${m.year}_${m.month}`]?.salesBreakdown || [])) {
+        if (!map[s.id]) map[s.id] = s.name;
+      }
+    }
+    return Object.entries(map).map(([id, name]) => ({ id, name }));
+  }, [months, monthlyData]);
+
+  const stickyCell = (bg, extra = {}) => ({
+    minWidth: LABEL_W, width: LABEL_W, padding: '5px 12px',
+    fontSize: 12, flexShrink: 0,
+    position: 'sticky', left: 0, zIndex: 2,
+    background: bg, borderRight: '1px solid var(--border)',
+    ...extra,
+  });
+
+  const dataCell = (isCur, extra = {}) => ({
+    minWidth: COL_W, width: COL_W, padding: '5px 8px',
+    fontSize: 12, textAlign: 'right', flexShrink: 0,
+    background: isCur ? 'var(--accent-dim)' : 'transparent',
+    borderLeft: isCur ? '2px solid var(--accent)' : 'none',
+    ...extra,
+  });
 
   return (
     <div ref={scrollRef} style={{ overflowX: 'auto', position: 'relative' }}>
@@ -161,15 +195,9 @@ function MonthlyGrid({ monthlyData }) {
         {/* Sticky header */}
         <div style={{
           display: 'flex', position: 'sticky', top: 0, zIndex: 4,
-          background: 'var(--bg-secondary)',
-          borderBottom: '2px solid var(--border)',
+          background: 'var(--bg-secondary)', borderBottom: '2px solid var(--border)',
         }}>
-          <div style={{
-            minWidth: LABEL_W, width: LABEL_W, padding: '6px 12px',
-            fontSize: 12, fontWeight: 600, color: 'var(--text-primary)',
-            position: 'sticky', left: 0, zIndex: 5,
-            background: 'var(--bg-secondary)', borderRight: '1px solid var(--border)',
-          }}>
+          <div style={{ ...stickyCell('var(--bg-secondary)'), fontWeight: 600, color: 'var(--text-primary)', zIndex: 5 }}>
             Kalem
           </div>
           {months.map(({ year, month }) => {
@@ -190,65 +218,78 @@ function MonthlyGrid({ monthlyData }) {
         </div>
 
         {/* Rows */}
-        {ROWS.map(({ key, label, bold, color }, ri) => (
-          <div key={key} style={{
-            display: 'flex',
-            background: ri % 2 === 0 ? 'transparent' : 'var(--bg-alt-row)',
-            borderBottom: '1px solid var(--border)',
-          }}>
-            {/* Sticky label */}
-            <div style={{
-              minWidth: LABEL_W, width: LABEL_W, padding: '5px 12px',
-              fontSize: 12, color: 'var(--text-secondary)', flexShrink: 0,
-              position: 'sticky', left: 0, zIndex: 2,
-              background: ri % 2 === 0 ? 'var(--bg-card)' : 'var(--bg-alt-row)',
-              borderRight: '1px solid var(--border)',
-            }}>
-              {label}
-            </div>
-            {months.map(({ year, month }) => {
-              const isCur = year === curYear && month === curMonth;
-              const d   = monthlyData[`${year}_${month}`];
-              const val = d ? d[key] : 0;
-              const c   = color === 'dynamic' ? valColor(val) : (color || 'var(--text-primary)');
-              return (
-                <div key={`${year}_${month}`} style={{
-                  minWidth: COL_W, width: COL_W, padding: '5px 8px',
-                  fontSize: 12, textAlign: 'right', flexShrink: 0,
-                  fontWeight: bold ? 600 : 400, color: c,
-                  background: isCur ? 'var(--accent-dim)' : 'transparent',
-                  borderLeft: isCur ? '2px solid var(--accent)' : 'none',
-                }}>
-                  {val !== 0 ? fmtK(val) : '—'}
+        {ROWS.map(({ key, label, bold, color, expandable }, ri) => {
+          const rowBg = ri % 2 === 0 ? 'var(--bg-card)' : 'var(--bg-alt-row)';
+          const isExpanded = expandable && potOpen;
+
+          return (
+            <div key={key}>
+              {/* Ana satır */}
+              <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: rowBg }}>
+                <div
+                  style={{ ...stickyCell(rowBg), color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4, cursor: expandable ? 'pointer' : 'default' }}
+                  onClick={expandable ? () => setPotOpen(o => !o) : undefined}
+                >
+                  {expandable && (
+                    <span style={{ fontSize: 9, color: 'var(--accent)', flexShrink: 0 }}>
+                      {isExpanded ? '▼' : '▶'}
+                    </span>
+                  )}
+                  {label}
                 </div>
-              );
-            })}
-          </div>
-        ))}
+                {months.map(({ year, month }) => {
+                  const isCur = year === curYear && month === curMonth;
+                  const d   = monthlyData[`${year}_${month}`];
+                  const val = d ? d[key] : 0;
+                  const c   = color === 'dynamic' ? valColor(val) : (color || 'var(--text-primary)');
+                  return (
+                    <div key={`${year}_${month}`} style={{ ...dataCell(isCur), fontWeight: bold ? 600 : 400, color: c }}>
+                      {Math.abs(val) > 0.5 ? fmtK(val) : '—'}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Potansiyel kırılım satırları */}
+              {isExpanded && allSales.map(sale => (
+                <div key={sale.id} style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--bg-secondary)' }}>
+                  <div style={{ ...stickyCell('var(--bg-secondary)'), color: 'var(--text-muted)', paddingLeft: 28, fontSize: 11 }}>
+                    {sale.name}
+                  </div>
+                  {months.map(({ year, month }) => {
+                    const isCur = year === curYear && month === curMonth;
+                    const d = monthlyData[`${year}_${month}`];
+                    const breakdown = d?.salesBreakdown || [];
+                    const s = breakdown.find(b => b.id === sale.id);
+                    const val = s ? s.amount : 0;
+                    return (
+                      <div key={`${year}_${month}`} style={{ ...dataCell(isCur), fontSize: 11, color: val > 0 ? 'var(--accent)' : 'var(--text-muted)' }}>
+                        {val > 0.5 ? fmtK(val) : '—'}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-// ── Özet Kartı (inline expand) ────────────────────────────────────────────────
+// ── Özet Kartı ────────────────────────────────────────────────────────────────
 
 function SummaryCard({ label, projects, personnelMap, seniorityMap, potentialSales }) {
   const [open, setOpen] = useState(false);
-
   const { totals, monthlyAgg } = useMemo(() => {
     const agg = aggPnL(projects, personnelMap, seniorityMap, potentialSales);
     return { totals: sumPnL(agg), monthlyAgg: agg };
   }, [projects, personnelMap, seniorityMap, potentialSales]);
 
   return (
-    <div style={{
-      borderRadius: 8, border: '2px solid var(--accent)',
-      background: 'var(--bg-card)', overflow: 'hidden', marginBottom: 8,
-    }}>
-      <div onClick={() => setOpen(o => !o)} style={{
-        padding: '12px 16px', cursor: 'pointer',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-      }}>
+    <div style={{ borderRadius: 8, border: '2px solid var(--accent)', background: 'var(--bg-card)', overflow: 'hidden', marginBottom: 8 }}>
+      <div onClick={() => setOpen(o => !o)} style={{ padding: '12px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--accent)' }}>{label}</div>
         <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
           <span style={{ fontSize: 12 }}>
@@ -271,7 +312,7 @@ function SummaryCard({ label, projects, personnelMap, seniorityMap, potentialSal
   );
 }
 
-// ── Proje Kartı (list görünümü) ───────────────────────────────────────────────
+// ── Proje Kartı ───────────────────────────────────────────────────────────────
 
 function ProjectCard({ project, totals, onClick }) {
   const [hov, setHov] = useState(false);
@@ -291,9 +332,7 @@ function ProjectCard({ project, totals, onClick }) {
     >
       <div style={{ flex: 1 }}>
         <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>{project.name}</div>
-        {project.customerName && (
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{project.customerName}</div>
-        )}
+        {project.customerName && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{project.customerName}</div>}
         <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 3 }}>
           {MONTHS_SHORT[project.startMonth - 1]} {project.startYear} – {MONTHS_SHORT[project.endMonth - 1]} {project.endYear}
         </div>
@@ -312,7 +351,7 @@ function ProjectCard({ project, totals, onClick }) {
   );
 }
 
-// ── Proje Detay Görünümü ──────────────────────────────────────────────────────
+// ── Proje Detay ───────────────────────────────────────────────────────────────
 
 function ProjectDetail({ project, personnelMap, seniorityMap, potentialSales, onBack }) {
   const monthlyData = useMemo(
@@ -328,9 +367,7 @@ function ProjectDetail({ project, personnelMap, seniorityMap, potentialSales, on
           <button className="btn btn-ghost" onClick={onBack} style={{ padding: '6px 10px' }}>← Geri</button>
           <div>
             <div className="page-title">{project.name}</div>
-            {project.customerName && (
-              <div className="page-subtitle">{project.customerName}</div>
-            )}
+            {project.customerName && <div className="page-subtitle">{project.customerName}</div>}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 24 }}>
@@ -351,27 +388,18 @@ function ProjectDetail({ project, personnelMap, seniorityMap, potentialSales, on
   );
 }
 
-// ── Liste Görünümü ────────────────────────────────────────────────────────────
+// ── Grup Bölümü ───────────────────────────────────────────────────────────────
 
 function GroupSection({ title, projects, allTotals, onSelect }) {
   if (projects.length === 0) return null;
   return (
     <div style={{ marginBottom: 24 }}>
-      <div style={{
-        fontSize: 11, fontWeight: 600, color: 'var(--text-muted)',
-        letterSpacing: '0.06em', textTransform: 'uppercase',
-        marginBottom: 8, paddingLeft: 2,
-      }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8, paddingLeft: 2 }}>
         {title} ({projects.length})
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {projects.map(p => (
-          <ProjectCard
-            key={p.id}
-            project={p}
-            totals={allTotals[p.id]}
-            onClick={() => onSelect(p)}
-          />
+          <ProjectCard key={p.id} project={p} totals={allTotals[p.id]} onClick={() => onSelect(p)} />
         ))}
       </div>
     </div>
@@ -406,12 +434,10 @@ export default function PnLPage() {
   const personnelMap = useMemo(() => Object.fromEntries(personnel.map(p => [p.id, p])), [personnel]);
   const seniorityMap = useMemo(() => Object.fromEntries(seniorities.map(s => [s.id, s])), [seniorities]);
 
-  // Tüm projelerin toplam P&L — kart listesi için
   const allTotals = useMemo(() => {
     const map = {};
-    for (const p of projects) {
+    for (const p of projects)
       map[p.id] = sumPnL(calcProjectPnL(p, personnelMap, seniorityMap, potSales));
-    }
     return map;
   }, [projects, personnelMap, seniorityMap, potSales]);
 
@@ -426,7 +452,6 @@ export default function PnLPage() {
 
   if (loading) return <div className="loading">Yükleniyor...</div>;
 
-  // Detay görünümü
   if (selected) {
     return (
       <ProjectDetail
@@ -448,17 +473,14 @@ export default function PnLPage() {
         </div>
       </div>
 
-      {/* Özet kartları */}
       <SummaryCard label="Müşterili Projeler Toplamı" projects={customerProjects}
         personnelMap={personnelMap} seniorityMap={seniorityMap} potentialSales={potSales} />
       <SummaryCard label="SGE Toplamı (Tüm Projeler)" projects={projects}
         personnelMap={personnelMap} seniorityMap={seniorityMap} potentialSales={potSales} />
 
       <div style={{ marginTop: 20 }}>
-        <GroupSection title="Müşterili Projeler" projects={customerProjects}
-          allTotals={allTotals} onSelect={setSelected} />
-        <GroupSection title="Bölüm Projeleri" projects={divisionProjects}
-          allTotals={allTotals} onSelect={setSelected} />
+        <GroupSection title="Müşterili Projeler" projects={customerProjects} allTotals={allTotals} onSelect={setSelected} />
+        <GroupSection title="Bölüm Projeleri"    projects={divisionProjects} allTotals={allTotals} onSelect={setSelected} />
       </div>
     </div>
   );
