@@ -1,6 +1,5 @@
 import { NavLink } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { useAuth } from '../auth/AuthContext';
 
 const Icons = {
   Users:    () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
@@ -20,7 +19,6 @@ function todayStr() {
 }
 
 export default function Sidebar() {
-  const { user, logout } = useAuth();
   const [today, setToday] = useState(todayStr());
 
   useEffect(() => {
@@ -70,7 +68,7 @@ export default function Sidebar() {
       </div>
 
       <div className="sidebar-section">
-        <div className="sidebar-section-label">Kaynak Yönetimi</div>
+        <div className="sidebar-section-label">Ayarlar</div>
         <NavLink to="/seniorities" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
           <Icons.Award /> Kıdem Yönetimi
         </NavLink>
@@ -80,27 +78,6 @@ export default function Sidebar() {
         <NavLink to="/organization" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
           <Icons.Building /> Organizasyon Yönetimi
         </NavLink>
-      </div>
-
-      {/* Kullanıcı bilgisi + çıkış */}
-      <div style={{ marginTop: 'auto', padding: '16px 12px', borderTop: '1px solid var(--border)' }}>
-        <div style={{ padding: '10px 10px', borderRadius: 8, background: 'var(--bg-hover)' }}>
-          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 2 }}>
-            {user?.fullName}
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
-            {user?.role === 'ADMIN' ? 'Yönetici' : 'Kullanıcı'}
-          </div>
-          <button onClick={logout} style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '5px 8px', borderRadius: 6, cursor: 'pointer',
-            background: 'transparent', border: '1px solid var(--border)',
-            color: 'var(--text-muted)', fontSize: 12, fontFamily: 'DM Sans, sans-serif',
-            width: '100%',
-          }}>
-            <Icons.Logout /> Çıkış Yap
-          </button>
-        </div>
       </div>
     </aside>
   );
