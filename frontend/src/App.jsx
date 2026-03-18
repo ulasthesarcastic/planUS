@@ -39,10 +39,23 @@ function LogoutIcon() {
   );
 }
 
+function todayStr() {
+  const d = new Date();
+  return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
+}
+
 function TopBar({ user, logout }) {
   const [open, setOpen] = useState(false);
+  const [today, setToday] = useState(todayStr());
   const ref = useRef(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const now = new Date();
+    const msUntilMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1) - now;
+    const timer = setTimeout(() => setToday(todayStr()), msUntilMidnight);
+    return () => clearTimeout(timer);
+  }, [today]);
 
   useEffect(() => {
     if (!open) return;
@@ -53,6 +66,11 @@ function TopBar({ user, logout }) {
 
   return (
     <div className="topbar">
+      {/* Tarih - sol */}
+      <div style={{ marginRight: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Tarih</span>
+        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>{today}</span>
+      </div>
       <div ref={ref} style={{ position: 'relative' }}>
         <button
           onClick={() => setOpen(o => !o)}

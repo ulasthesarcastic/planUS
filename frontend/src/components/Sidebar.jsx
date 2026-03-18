@@ -1,5 +1,6 @@
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate, Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
+import logo from '../assets/logo.png';
 
 const Icons = {
   Users:    () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
@@ -16,35 +17,18 @@ const Icons = {
 
 const SETTINGS_ROUTES = ['/seniorities', '/personnel', '/organization'];
 
-function todayStr() {
-  const d = new Date();
-  return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
-}
-
 export default function Sidebar() {
-  const [today, setToday] = useState(todayStr());
   const location = useLocation();
   const navigate = useNavigate();
 
   const inSettings = SETTINGS_ROUTES.includes(location.pathname);
 
-  useEffect(() => {
-    const now = new Date();
-    const msUntilMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1) - now;
-    const timer = setTimeout(() => setToday(todayStr()), msUntilMidnight);
-    return () => clearTimeout(timer);
-  }, [today]);
-
   return (
     <aside className="sidebar">
-      <div className="sidebar-logo">
-        <h1>planUS</h1>
-        <span>v1.0.0</span>
-      </div>
-
-      <div style={{ padding: '0 20px 16px', borderBottom: '1px solid var(--border)' }}>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 4 }}>Tarih</div>
-        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>{today}</div>
+      <div className="sidebar-logo" style={{ paddingBottom: 20, borderBottom: '1px solid var(--border)', marginBottom: 8 }}>
+        <Link to="/projects" style={{ display: 'block' }}>
+          <img src={logo} alt="planUS" style={{ width: '100%', maxWidth: 180, height: 'auto', display: 'block' }} />
+        </Link>
       </div>
 
       {inSettings ? (
