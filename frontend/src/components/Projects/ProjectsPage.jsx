@@ -612,18 +612,18 @@ function ProjectCard({ project, personnel, personnelMap, seniorityMap, onClick, 
         </div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px' }}>
-        {mgr && (
-          <div style={{ fontSize: 11 }}>
-            <span style={{ color: 'var(--text-secondary)' }}>Proje Yöneticisi: </span>
-            <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{mgr.firstName} {mgr.lastName}</span>
-          </div>
-        )}
-        {project.customerName && (
-          <div style={{ fontSize: 11 }}>
-            <span style={{ color: 'var(--text-secondary)' }}>Müşteri: </span>
-            <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{project.customerName}</span>
-          </div>
-        )}
+        <div style={{ fontSize: 11 }}>
+          <span style={{ color: 'var(--text-secondary)' }}>Proje Yöneticisi: </span>
+          <span style={{ color: mgr ? 'var(--text-primary)' : 'var(--text-secondary)', fontWeight: mgr ? 500 : 400 }}>
+            {mgr ? `${mgr.firstName} ${mgr.lastName}` : '-'}
+          </span>
+        </div>
+        <div style={{ fontSize: 11 }}>
+          <span style={{ color: 'var(--text-secondary)' }}>Müşteri: </span>
+          <span style={{ color: project.customerName ? 'var(--text-primary)' : 'var(--text-secondary)', fontWeight: project.customerName ? 500 : 400 }}>
+            {project.customerName || '-'}
+          </span>
+        </div>
         {project.budget != null && (
           <div style={{ fontSize: 11 }}>
             <span style={{ color: 'var(--text-secondary)' }}>Bütçe: </span>
