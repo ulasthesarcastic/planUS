@@ -312,7 +312,7 @@ function SummaryCard({ label, projects, personnelMap, seniorityMap, potentialSal
   );
 }
 
-// ── Proje Kartı ───────────────────────────────────────────────────────────────
+// ── Proje Kartı (ProjectsPage boyutlarında) ───────────────────────────────────
 
 function ProjectCard({ project, totals, onClick }) {
   const [hov, setHov] = useState(false);
@@ -322,30 +322,29 @@ function ProjectCard({ project, totals, onClick }) {
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
-        padding: '12px 16px', borderRadius: 8, cursor: 'pointer',
+        padding: '14px 16px', borderRadius: 8, cursor: 'pointer',
         border: `1px solid ${hov ? 'var(--accent)' : 'var(--border)'}`,
         background: 'var(--bg-card)',
-        boxShadow: hov ? '0 2px 14px rgba(99,102,241,0.10)' : 'none',
+        boxShadow: hov ? '0 2px 14px rgba(99,102,241,0.12)' : 'none',
         transition: 'border-color 0.15s, box-shadow 0.15s',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
       }}
     >
-      <div style={{ flex: 1 }}>
-        <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>{project.name}</div>
-        {project.customerName && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{project.customerName}</div>}
-        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 3 }}>
-          {MONTHS_SHORT[project.startMonth - 1]} {project.startYear} – {MONTHS_SHORT[project.endMonth - 1]} {project.endYear}
-        </div>
+      <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', marginBottom: 4 }}>
+        {project.name}
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
-        <div style={{ fontSize: 11 }}>
-          <span style={{ color: 'var(--text-secondary)' }}>Toplam: </span>
-          <span style={{ fontWeight: 600, color: valColor(totals.toplam) }}>{fmtK(totals.toplam)}</span>
-        </div>
-        <div style={{ fontSize: 11 }}>
-          <span style={{ color: 'var(--text-secondary)' }}>Top. Pot.: </span>
-          <span style={{ fontWeight: 600, color: valColor(totals.toplamPotansiyel) }}>{fmtK(totals.toplamPotansiyel)}</span>
-        </div>
+      {project.customerName && (
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>{project.customerName}</div>
+      )}
+      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8 }}>
+        {MONTHS_SHORT[project.startMonth - 1]} {project.startYear} – {MONTHS_SHORT[project.endMonth - 1]} {project.endYear}
+      </div>
+      <div style={{ fontSize: 11 }}>
+        <span style={{ color: 'var(--text-secondary)' }}>Toplam: </span>
+        <span style={{ fontWeight: 600, color: valColor(totals.toplam) }}>{fmtK(totals.toplam)}</span>
+      </div>
+      <div style={{ fontSize: 11, marginTop: 2 }}>
+        <span style={{ color: 'var(--text-secondary)' }}>Top. Pot.: </span>
+        <span style={{ fontWeight: 600, color: valColor(totals.toplamPotansiyel) }}>{fmtK(totals.toplamPotansiyel)}</span>
       </div>
     </div>
   );
@@ -388,20 +387,86 @@ function ProjectDetail({ project, personnelMap, seniorityMap, potentialSales, on
   );
 }
 
-// ── Grup Bölümü ───────────────────────────────────────────────────────────────
+// ── EMY Alt Grubu ─────────────────────────────────────────────────────────────
 
-function GroupSection({ title, projects, allTotals, onSelect }) {
-  if (projects.length === 0) return null;
+function EMySubGroup({ managerName, projects, allTotals, onSelect }) {
+  const [open, setOpen] = useState(true);
   return (
-    <div style={{ marginBottom: 24 }}>
-      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8, paddingLeft: 2 }}>
-        {title} ({projects.length})
+    <div style={{ marginBottom: 16 }}>
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer',
+          marginBottom: open ? 8 : 0, paddingLeft: 2,
+        }}
+      >
+        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{open ? '▼' : '▶'}</span>
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.04em' }}>
+          {managerName} ({projects.length})
+        </span>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {projects.map(p => (
-          <ProjectCard key={p.id} project={p} totals={allTotals[p.id]} onClick={() => onSelect(p)} />
-        ))}
+      {open && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))', gap: 10 }}>
+          {projects.map(p => (
+            <ProjectCard key={p.id} project={p} totals={allTotals[p.id]} onClick={() => onSelect(p)} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Grup Bölümü (kapanabilir) ─────────────────────────────────────────────────
+
+function GroupSection({ title, projects, allTotals, onSelect, personnelMap, byEmy = false }) {
+  const [open, setOpen] = useState(true);
+  if (projects.length === 0) return null;
+
+  // EMY'ye göre gruplama
+  const groups = byEmy ? (() => {
+    const map = {};
+    for (const p of projects) {
+      const mgr = personnelMap?.[p.projectManagerId];
+      const key = mgr ? `${mgr.firstName} ${mgr.lastName}` : 'Yönetici Atanmamış';
+      if (!map[key]) map[key] = [];
+      map[key].push(p);
+    }
+    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b, 'tr'));
+  })() : null;
+
+  return (
+    <div style={{ marginBottom: 28 }}>
+      {/* Başlık — kapanabilir */}
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: open ? 12 : 0, paddingLeft: 2 }}
+      >
+        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{open ? '▼' : '▶'}</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.02em' }}>
+          {title}
+        </span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>({projects.length})</span>
       </div>
+
+      {open && (
+        byEmy ? (
+          groups.map(([mgrName, mgrProjects]) => (
+            <EMySubGroup
+              key={mgrName}
+              managerName={mgrName}
+              projects={mgrProjects}
+              allTotals={allTotals}
+              onSelect={onSelect}
+            />
+          ))
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))', gap: 10 }}>
+            {projects.map(p => (
+              <ProjectCard key={p.id} project={p} totals={allTotals[p.id]} onClick={() => onSelect(p)} />
+            ))}
+          </div>
+        )
+      )}
     </div>
   );
 }
@@ -479,8 +544,10 @@ export default function PnLPage() {
         personnelMap={personnelMap} seniorityMap={seniorityMap} potentialSales={potSales} />
 
       <div style={{ marginTop: 20 }}>
-        <GroupSection title="Müşterili Projeler" projects={customerProjects} allTotals={allTotals} onSelect={setSelected} />
-        <GroupSection title="Bölüm Projeleri"    projects={divisionProjects} allTotals={allTotals} onSelect={setSelected} />
+        <GroupSection title="Müşterili Projeler" projects={customerProjects} allTotals={allTotals}
+          onSelect={setSelected} personnelMap={personnelMap} byEmy />
+        <GroupSection title="Bölüm Projeleri" projects={divisionProjects} allTotals={allTotals}
+          onSelect={setSelected} personnelMap={personnelMap} />
       </div>
     </div>
   );
