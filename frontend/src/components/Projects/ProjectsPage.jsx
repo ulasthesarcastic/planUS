@@ -1605,9 +1605,8 @@ function BudgetTab({ project, onUpdate }) {
 
 // ── PROJE DETAY EKRANI ───────────────────────────────────────────
 function ProjectDetail({ project, allPersonnel, allProducts, units, seniorities, onBack, onEdit, onUpdate }) {
-  const [activeTab, setActiveTab] = useState('personnel');
+  const [activeTab, setActiveTab] = useState('planning');
   const tabs = [
-    { id:'personnel', label:'Proje Personeli' },
     { id:'planning', label:'Planlama' },
     { id:'payment', label:'Ödeme Planı' },
     { id:'milestones', label:'Kilometre Taşları' },
