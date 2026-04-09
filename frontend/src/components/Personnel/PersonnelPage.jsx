@@ -2,18 +2,22 @@ import { useState, useEffect } from 'react';
 import { personnelApi, seniorityApi, organizationApi } from '../../services/api';
 import SearchableSelect from '../SearchableSelect';
 
-function EditIcon() {
-  return <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
-}
-function TrashIcon() {
-  return <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>;
-}
-function PlusIcon() {
-  return <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
-}
-function XIcon() {
-  return <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
-}
+import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import TextField from '@mui/material/TextField';
+import Alert from '@mui/material/Alert';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Chip from '@mui/material/Chip';
+
+import AddIcon from '@mui/icons-material/Add';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import CloseIcon from '@mui/icons-material/Close';
 
 function PersonnelModal({ personnel, seniorities, units, onSave, onClose }) {
   const isEdit = !!personnel;
@@ -44,16 +48,11 @@ function PersonnelModal({ personnel, seniorities, units, onSave, onClose }) {
     setForm(f => ({ ...f, unitId: rootId }));
   };
 
-  const handleChildChange = (childId) => {
-    setForm(f => ({ ...f, unitId: childId }));
-  };
-
   const handleSave = async () => {
     if (!form.firstName.trim()) return setError('Ad zorunludur.');
     if (!form.lastName.trim()) return setError('Soyad zorunludur.');
     if (!form.seniorityId) return setError('Kıdem seçilmelidir.');
-    setError('');
-    setSaving(true);
+    setError(''); setSaving(true);
     try {
       if (isEdit) await personnelApi.update(personnel.id, form);
       else await personnelApi.create(form);
@@ -64,30 +63,21 @@ function PersonnelModal({ personnel, seniorities, units, onSave, onClose }) {
   };
 
   return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
-        <div className="modal-header">
-          <div className="modal-title">{isEdit ? 'Personel Düzenle' : 'Yeni Personel'}</div>
-          <button className="btn-icon" onClick={onClose}><XIcon /></button>
-        </div>
-
-        {error && <div className="alert alert-error">{error}</div>}
-
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Ad</label>
-            <input className="form-input" placeholder="Ad" value={form.firstName}
-              onChange={e => setForm({ ...form, firstName: e.target.value })} autoFocus />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Soyad</label>
-            <input className="form-input" placeholder="Soyad" value={form.lastName}
-              onChange={e => setForm({ ...form, lastName: e.target.value })} />
-          </div>
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">Kıdem</label>
+    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        {isEdit ? 'Personel Düzenle' : 'Yeni Personel'}
+        <IconButton size="small" onClick={onClose}><CloseIcon fontSize="small" /></IconButton>
+      </DialogTitle>
+      <DialogContent>
+        {error && <Alert severity="error" sx={{ mb: 2, mt: 1 }}>{error}</Alert>}
+        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mt: 1 }}>
+          <TextField label="Ad" placeholder="Ad" value={form.firstName} autoFocus
+            onChange={e => setForm({ ...form, firstName: e.target.value })} />
+          <TextField label="Soyad" placeholder="Soyad" value={form.lastName}
+            onChange={e => setForm({ ...form, lastName: e.target.value })} />
+        </Box>
+        <Box sx={{ mt: 2 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>Kıdem</Typography>
           <SearchableSelect
             value={form.seniorityId || ''}
             onChange={v => setForm({ ...form, seniorityId: v })}
@@ -95,45 +85,38 @@ function PersonnelModal({ personnel, seniorities, units, onSave, onClose }) {
             style={{ width: '100%' }}
             options={seniorities.map(s => ({ value: String(s.id), label: s.name }))}
           />
-        </div>
-
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">1. Seviye Birim</label>
+        </Box>
+        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mt: 2 }}>
+          <Box>
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>1. Seviye Birim</Typography>
             <SearchableSelect
               value={selectedRoot || ''}
-              onChange={v => handleRootChange(v)}
+              onChange={handleRootChange}
               placeholder="— Seçin —"
               style={{ width: '100%' }}
-              options={[
-                { value: '', label: '— Seçin —' },
-                ...roots.map(r => ({ value: String(r.id), label: r.name })),
-              ]}
+              options={[{ value: '', label: '— Seçin —' }, ...roots.map(r => ({ value: String(r.id), label: r.name }))]}
             />
-          </div>
-          <div className="form-group">
-            <label className="form-label">2. Seviye Birim</label>
+          </Box>
+          <Box>
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>2. Seviye Birim</Typography>
             <SearchableSelect
               value={(form.unitId === selectedRoot ? '' : form.unitId) || ''}
-              onChange={v => handleChildChange(v)}
+              onChange={v => setForm(f => ({ ...f, unitId: v }))}
               placeholder="— Seçin —"
-              style={{ width: '100%', opacity: !selectedRoot || children.length === 0 ? 0.5 : 1, pointerEvents: !selectedRoot || children.length === 0 ? 'none' : 'auto' }}
-              options={[
-                { value: '', label: '— Seçin —' },
-                ...children.map(c => ({ value: String(c.id), label: c.name })),
-              ]}
+              style={{ width: '100%' }}
+              disabled={!selectedRoot || children.length === 0}
+              options={[{ value: '', label: '— Seçin —' }, ...children.map(c => ({ value: String(c.id), label: c.name }))]}
             />
-          </div>
-        </div>
-
-        <div className="form-actions">
-          <button className="btn btn-ghost" onClick={onClose}>İptal</button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={saving || seniorities.length === 0}>
-            {saving ? 'Kaydediliyor...' : isEdit ? 'Güncelle' : 'Oluştur'}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Box>
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button variant="outlined" onClick={onClose}>İptal</Button>
+        <Button variant="contained" onClick={handleSave} disabled={saving || seniorities.length === 0}>
+          {saving ? 'Kaydediliyor...' : isEdit ? 'Güncelle' : 'Oluştur'}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 
@@ -153,9 +136,7 @@ export default function PersonnelPage() {
   const load = async () => {
     try {
       const [pRes, sRes, uRes] = await Promise.all([personnelApi.getAll(), seniorityApi.getAll(), organizationApi.getAll()]);
-      setPersonnel(pRes.data);
-      setSeniorities(sRes.data);
-      setUnits(uRes.data);
+      setPersonnel(pRes.data); setSeniorities(sRes.data); setUnits(uRes.data);
     } finally { setLoading(false); }
   };
 
@@ -173,8 +154,7 @@ export default function PersonnelPage() {
 
   const handleDelete = async (id) => {
     await personnelApi.delete(id);
-    setDeleteConfirm(null);
-    load();
+    setDeleteConfirm(null); load();
   };
 
   const handleSort = (col) => {
@@ -188,14 +168,8 @@ export default function PersonnelPage() {
   const childrenOfSelected = filterRoot !== 'ALL' ? getChildren(filterRoot) : [];
 
   const filtered = personnel
-    .filter(p => {
-      if (filterRoot === 'ALL') return true;
-      return getRootOfUnit(p.unitId) === filterRoot;
-    })
-    .filter(p => {
-      if (filterChild === 'ALL') return true;
-      return p.unitId === filterChild;
-    })
+    .filter(p => filterRoot === 'ALL' || getRootOfUnit(p.unitId) === filterRoot)
+    .filter(p => filterChild === 'ALL' || p.unitId === filterChild)
     .sort((a, b) => {
       if (!sortCol) return 0;
       const dir = sortDir === 'asc' ? 1 : -1;
@@ -212,49 +186,51 @@ export default function PersonnelPage() {
           <div className="page-title">Personel Yönetimi</div>
           <div className="page-subtitle">Proje personelini tanımlayın ve yönetin</div>
         </div>
-        <button className="btn btn-primary" onClick={() => { setEditing(null); setModalOpen(true); }}>
-          <PlusIcon /> Yeni Personel
-        </button>
+        <Button variant="contained" startIcon={<AddIcon />}
+          onClick={() => { setEditing(null); setModalOpen(true); }}>
+          Yeni Personel
+        </Button>
       </div>
 
       {/* Filtreler */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-        <button onClick={() => { setFilterRoot('ALL'); setFilterChild('ALL'); }} style={{
-          padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-          border: '1px solid var(--border)', fontFamily: 'DM Sans, sans-serif',
-          background: filterRoot === 'ALL' ? 'var(--accent)' : 'var(--bg-secondary)',
-          color: filterRoot === 'ALL' ? '#fff' : 'var(--text-secondary)',
-        }}>Tümü ({personnel.length})</button>
-
+      <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+        <Chip
+          label={`Tümü (${personnel.length})`}
+          onClick={() => { setFilterRoot('ALL'); setFilterChild('ALL'); }}
+          color={filterRoot === 'ALL' ? 'primary' : 'default'}
+          variant={filterRoot === 'ALL' ? 'filled' : 'outlined'}
+          size="small"
+        />
         {roots.map(r => {
           const count = personnel.filter(p => getRootOfUnit(p.unitId) === r.id).length;
           return (
-            <button key={r.id} onClick={() => { setFilterRoot(r.id); setFilterChild('ALL'); }} style={{
-              padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-              border: '1px solid var(--border)', fontFamily: 'DM Sans, sans-serif',
-              background: filterRoot === r.id ? 'var(--accent)' : 'var(--bg-secondary)',
-              color: filterRoot === r.id ? '#fff' : 'var(--text-secondary)',
-            }}>{r.name} ({count})</button>
+            <Chip key={r.id}
+              label={`${r.name} (${count})`}
+              onClick={() => { setFilterRoot(r.id); setFilterChild('ALL'); }}
+              color={filterRoot === r.id ? 'primary' : 'default'}
+              variant={filterRoot === r.id ? 'filled' : 'outlined'}
+              size="small"
+            />
           );
         })}
-
         {filterRoot !== 'ALL' && childrenOfSelected.length > 0 && (
           <>
-            <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>›</span>
+            <Typography variant="caption" color="text.disabled">›</Typography>
             {childrenOfSelected.map(c => {
               const count = personnel.filter(p => p.unitId === c.id).length;
               return (
-                <button key={c.id} onClick={() => setFilterChild(filterChild === c.id ? 'ALL' : c.id)} style={{
-                  padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                  border: '1px solid var(--border)', fontFamily: 'DM Sans, sans-serif',
-                  background: filterChild === c.id ? '#7c3aed' : 'var(--bg-secondary)',
-                  color: filterChild === c.id ? '#fff' : 'var(--text-secondary)',
-                }}>{c.name} ({count})</button>
+                <Chip key={c.id}
+                  label={`${c.name} (${count})`}
+                  onClick={() => setFilterChild(filterChild === c.id ? 'ALL' : c.id)}
+                  color={filterChild === c.id ? 'secondary' : 'default'}
+                  variant={filterChild === c.id ? 'filled' : 'outlined'}
+                  size="small"
+                />
               );
             })}
           </>
         )}
-      </div>
+      </Box>
 
       <div className="card">
         {loading ? (
@@ -280,8 +256,12 @@ export default function PersonnelPage() {
                     <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{getUnitName(p.unitId)}</td>
                     <td>
                       <div className="actions-cell">
-                        <button className="btn-icon" onClick={() => { setEditing(p); setModalOpen(true); }}><EditIcon /></button>
-                        <button className="btn-icon danger" onClick={() => setDeleteConfirm(p)}><TrashIcon /></button>
+                        <IconButton size="small" onClick={() => { setEditing(p); setModalOpen(true); }}>
+                          <EditOutlinedIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
+                        <IconButton size="small" color="error" onClick={() => setDeleteConfirm(p)}>
+                          <DeleteOutlineIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
                       </div>
                     </td>
                   </tr>
@@ -298,20 +278,18 @@ export default function PersonnelPage() {
           onClose={() => setModalOpen(false)} />
       )}
 
-      {deleteConfirm && (
-        <div className="modal-overlay" onClick={() => setDeleteConfirm(null)}>
-          <div className="modal" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
-            <div className="modal-title" style={{ marginBottom: 8 }}>Personeli Sil</div>
-            <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 16 }}>
-              <strong>{deleteConfirm.firstName} {deleteConfirm.lastName}</strong> silinecek.
-            </p>
-            <div className="form-actions">
-              <button className="btn btn-ghost" onClick={() => setDeleteConfirm(null)}>İptal</button>
-              <button className="btn btn-danger" onClick={() => handleDelete(deleteConfirm.id)}>Sil</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Dialog open={!!deleteConfirm} onClose={() => setDeleteConfirm(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Personeli Sil</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            <strong>{deleteConfirm?.firstName} {deleteConfirm?.lastName}</strong> silinecek. Bu işlem geri alınamaz.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button variant="outlined" onClick={() => setDeleteConfirm(null)}>İptal</Button>
+          <Button variant="contained" color="error" onClick={() => handleDelete(deleteConfirm.id)}>Sil</Button>
+        </DialogActions>
+      </Dialog>
     </div>
   );
 }

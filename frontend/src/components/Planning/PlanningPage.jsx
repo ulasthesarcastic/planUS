@@ -2,6 +2,14 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { projectApi, personnelApi, organizationApi, seniorityApi, potentialSaleApi } from '../../services/api';
 import SearchableSelect from '../SearchableSelect';
+import {
+  Box, Typography, Tabs, Tab, Chip, Button, IconButton,
+  Dialog, DialogTitle, DialogContent, DialogActions,
+  CircularProgress, TextField, FormControl, Select, MenuItem,
+  Alert,
+} from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
+import AddIcon from '@mui/icons-material/Add';
 
 const MONTHS      = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
 const MONTHS_FULL = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
@@ -141,22 +149,27 @@ function PctInput({ value, onChange, isModified }) {
 // ── Confirm modal ────────────────────────────────────────────────────────────
 function ConfirmModal({ title, message, buttons, onClose }) {
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-      onClick={e => e.target === e.currentTarget && onClose('cancel')}>
-      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: 24, minWidth: 320, maxWidth: 420, fontFamily: 'DM Sans, sans-serif' }}>
-        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>{title}</div>
-        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20 }}>{message}</div>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          {buttons.map(b => (
-            <button key={b.key} className={b.primary ? 'btn btn-primary' : 'btn btn-ghost'}
-              style={{ padding: '6px 16px', fontSize: 12 }}
-              onClick={() => onClose(b.key)}>
-              {b.label}
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
+    <Dialog open={true} onClose={() => onClose('cancel')} maxWidth="sm" fullWidth>
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        {title}
+        <IconButton onClick={() => onClose('cancel')} size="small"><CloseIcon /></IconButton>
+      </DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" color="text.secondary">{message}</Typography>
+      </DialogContent>
+      <DialogActions>
+        {buttons.map(b => (
+          <Button
+            key={b.key}
+            variant={b.primary ? 'contained' : 'outlined'}
+            size="small"
+            onClick={() => onClose(b.key)}
+          >
+            {b.label}
+          </Button>
+        ))}
+      </DialogActions>
+    </Dialog>
   );
 }
 
@@ -187,48 +200,58 @@ function BulkAssignModal({ person, project, onSave, onClose }) {
   };
 
   return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: 460 }}>
-        <div className="modal-header">
-          <div className="modal-title">Toplu Atama — {person.firstName} {person.lastName}</div>
-          <button className="btn-icon" onClick={onClose}><XIcon /></button>
-        </div>
-        <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 20 }}>
+    <Dialog open={true} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        Toplu Atama — {person.firstName} {person.lastName}
+        <IconButton onClick={onClose} size="small"><CloseIcon /></IconButton>
+      </DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Seçilen periyot için değerleri girin. Boş alanlar değişmez.
-        </p>
-        <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 1.5, mb: 2 }}>
           {[['Başlangıç', sM, setSM, sY, setSY], ['Bitiş', eM, setEM, eY, setEY]].map(([lbl, mv, setMv, yv, setYv]) => (
-            <div key={lbl} style={{ flex: 1 }}>
-              <div className="form-label">{lbl}</div>
-              <div className="month-year-row">
-                <select className="form-select" value={mv} onChange={e => setMv(+e.target.value)}>
-                  {MONTHS_FULL.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
-                </select>
-                <select className="form-select" value={yv} onChange={e => setYv(+e.target.value)}>
-                  {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-                </select>
-              </div>
-            </div>
+            <Box key={lbl} sx={{ flex: 1 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>{lbl}</Typography>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <FormControl size="small" fullWidth>
+                  <Select value={mv} onChange={e => setMv(+e.target.value)}>
+                    {MONTHS_FULL.map((m, i) => <MenuItem key={i} value={i+1}>{m}</MenuItem>)}
+                  </Select>
+                </FormControl>
+                <FormControl size="small" fullWidth>
+                  <Select value={yv} onChange={e => setYv(+e.target.value)}>
+                    {YEARS.map(y => <MenuItem key={y} value={y}>{y}</MenuItem>)}
+                  </Select>
+                </FormControl>
+              </Box>
+            </Box>
           ))}
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 20 }}>
+        </Box>
+        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1.5 }}>
           {[['need', need, setNeed], ['planned', planned, setPlanned], ['actual', actual, setActual]].map(([type, val, setter]) => (
-            <div key={type}>
-              <div className="form-label" style={{ color: TYPE_COLORS[type] }}>{TYPE_LABELS[type]}</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <input className="form-input" value={val} onChange={e => setter(e.target.value)}
-                  placeholder="—" style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace' }} />
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>%</span>
-              </div>
-            </div>
+            <Box key={type}>
+              <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: TYPE_COLORS[type] }}>{TYPE_LABELS[type]}</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <TextField
+                  size="small"
+                  fullWidth
+                  value={val}
+                  onChange={e => setter(e.target.value)}
+                  placeholder="—"
+                  inputProps={{ style: { textAlign: 'right', fontFamily: 'DM Mono, monospace' } }}
+                />
+                <Typography variant="caption" color="text.secondary">%</Typography>
+              </Box>
+            </Box>
           ))}
-        </div>
-        <div className="form-actions">
-          <button className="btn btn-ghost" onClick={onClose}>İptal</button>
-          <button className="btn btn-primary" onClick={handleSave}>Uygula</button>
-        </div>
-      </div>
-    </div>
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button variant="outlined" size="small" onClick={onClose}>İptal</Button>
+        <Button variant="contained" size="small" onClick={handleSave}>Uygula</Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 
@@ -560,7 +583,7 @@ function PlanningGrid({ project, allPersonnel, units, onBack, onReload }) {
                   ...grp.people.map((person, pi) => {
                     return (
                     <tr key={person.id} style={{ borderBottom: '1px solid var(--border)', background: pi % 2 === 0 ? 'transparent' : 'var(--bg-hover)' }}>
-                      <td style={{ padding: '3px 12px', position: 'sticky', left: 0, zIndex: 1, background: pi % 2 === 0 ? 'var(--bg-card)' : 'var(--bg-alt-row)', borderRight: '2px solid var(--border)', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '3px 12px', position: 'sticky', left: 0, zIndex: 1, background: 'var(--bg-card)', borderRight: '2px solid var(--border)', whiteSpace: 'nowrap' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                           <span style={{ fontWeight: 500, fontSize: 12, color: grp.nameColor }}>
                             {person.firstName} {person.lastName}
@@ -777,18 +800,18 @@ function ProjectSelectionScreen({ projects, personnel, personnelMap, seniorityMa
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
+      <Box sx={{ display: 'flex', gap: 0.75, mb: 2.5, flexWrap: 'wrap' }}>
         {PROJECT_TYPE_TABS.map(t => (
-          <button key={t.key} onClick={() => setTypeFilter(t.key)} style={{
-            padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-            border: '1px solid var(--border)', fontFamily: 'DM Sans, sans-serif',
-            background: typeFilter === t.key ? 'var(--accent)' : 'var(--bg-secondary)',
-            color: typeFilter === t.key ? '#fff' : 'var(--text-secondary)',
-          }}>
-            {t.label} ({counts[t.key] ?? 0})
-          </button>
+          <Chip
+            key={t.key}
+            label={`${t.label} (${counts[t.key] ?? 0})`}
+            onClick={() => setTypeFilter(t.key)}
+            color={typeFilter === t.key ? 'primary' : 'default'}
+            variant={typeFilter === t.key ? 'filled' : 'outlined'}
+            size="small"
+          />
         ))}
-      </div>
+      </Box>
       {filtered.length === 0
         ? <div className="empty-state"><p>Bu tipte proje yok.</p></div>
         : renderContent()
@@ -844,16 +867,20 @@ export default function PlanningPage() {
 
   useEffect(() => { load(); }, []);
 
-  if (loading) return <div className="loading">Yükleniyor...</div>;
+  if (loading) return (
+    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', p: 8 }}>
+      <CircularProgress />
+    </Box>
+  );
 
   return (
     <div>
       <div className="page-header">
         <div>
-          <div className="page-title">Proje Planlama</div>
-          <div className="page-subtitle">
+          <Typography variant="h6" fontWeight={700}>Proje Planlama</Typography>
+          <Typography variant="body2" color="text.secondary">
             {selectedProject ? selectedProject.name : 'Kaynak ihtiyaç, planlama ve gerçekleşen atamalarını yönetin'}
-          </div>
+          </Typography>
         </div>
       </div>
 

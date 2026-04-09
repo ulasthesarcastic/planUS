@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react';
 import { organizationApi, personnelApi } from '../../services/api';
 import SearchableSelect from '../SearchableSelect';
-
-const EditIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
+import {
+  Box, Typography, Chip, Button, IconButton,
+  Dialog, DialogTitle, DialogContent, DialogActions,
+  Alert, CircularProgress,
+} from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 
 const FILTER_LABELS = ['SGE', 'Teknoloji', 'Hizmetler'];
 
-// Her etiket için birden fazla arama terimi (veritabanındaki gerçek isimlerle eşleşmesi için)
 const FILTER_PATTERNS = {
   'SGE':        ['sge', 'enstitü'],
   'Teknoloji':  ['teknoloji'],
@@ -33,13 +37,13 @@ function ManagerModal({ unit, personnel, onSave, onClose }) {
   };
 
   return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: 420 }}>
-        <div className="modal-header">
-          <div className="modal-title">{unit.name} </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 18 }}>✕</button>
-        </div>
-        {error && <div className="alert alert-error">{error}</div>}
+    <Dialog open={true} onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        {unit.name}
+        <IconButton onClick={onClose} size="small"><CloseIcon /></IconButton>
+      </DialogTitle>
+      <DialogContent>
+        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
         <div className="form-group">
           <label className="form-label">Bölüm Yöneticisi</label>
           <SearchableSelect
@@ -50,14 +54,14 @@ function ManagerModal({ unit, personnel, onSave, onClose }) {
             style={{ width: '100%' }}
           />
         </div>
-        <div className="form-actions">
-          <button className="btn btn-ghost" onClick={onClose}>İptal</button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-            {saving ? 'Kaydediliyor...' : 'Kaydet'}
-          </button>
-        </div>
-      </div>
-    </div>
+      </DialogContent>
+      <DialogActions>
+        <Button variant="outlined" onClick={onClose}>İptal</Button>
+        <Button variant="contained" onClick={handleSave} disabled={saving}>
+          {saving ? 'Kaydediliyor...' : 'Kaydet'}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 
@@ -70,38 +74,29 @@ function UnitCard({ unit, personnel, parentName, onEdit }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        padding: '14px 16px',
-        borderRadius: 8,
+        padding: '14px 16px', borderRadius: 8,
         border: `1px solid ${hovered ? 'var(--accent)' : 'var(--border)'}`,
         background: 'var(--bg-card)',
         boxShadow: hovered ? '0 2px 14px rgba(99,102,241,0.12)' : 'none',
         transition: 'box-shadow 0.15s, border-color 0.15s',
       }}
     >
-      {/* Title row with edit button */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
         <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
-            {unit.name}
-          </div>
-          {parentName && (
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{parentName}</div>
-          )}
+          <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>{unit.name}</div>
+          {parentName && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{parentName}</div>}
         </div>
         <div onClick={e => e.stopPropagation()}>
-          <button className="btn-icon" onClick={() => onEdit(unit)} title="Düzenle" style={{ padding: 3 }}>
-            <EditIcon />
-          </button>
+          <IconButton size="small" onClick={() => onEdit(unit)} title="Düzenle" style={{ padding: 3 }}>
+            <EditOutlinedIcon fontSize="small" />
+          </IconButton>
         </div>
       </div>
-
-      {/* Manager info */}
       <div style={{ fontSize: 11 }}>
         <span style={{ color: 'var(--text-secondary)' }}>Bölüm Yöneticisi: </span>
         {manager
           ? <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{manager.firstName} {manager.lastName}</span>
-          : <span style={{ color: 'var(--text-muted)' }}>—</span>
-        }
+          : <span style={{ color: 'var(--text-muted)' }}>—</span>}
       </div>
     </div>
   );
@@ -126,8 +121,6 @@ export default function ResourcePlanningPage() {
 
   useEffect(() => { load(); }, []);
 
-  // Sadece kök birimler arasında ara — aksi hâlde "hizmetler" gibi bir kelime
-  // çocuk birimlerde de geçeceğinden yanlış eşleşme olur.
   const rootUnits = units.filter(u => !u.parentId);
 
   const filterGroups = FILTER_LABELS.map(label => ({
@@ -144,91 +137,63 @@ export default function ResourcePlanningPage() {
       .map(f => f.unit.id)
   );
 
-  // Build a map of unitId → unit for parent name lookup
   const unitMap = Object.fromEntries(units.map(u => [u.id, u]));
 
   const toggleFilter = (label) => {
     setSelectedFilters(prev => {
       const next = new Set(prev);
-      if (next.has(label)) next.delete(label);
-      else next.add(label);
+      next.has(label) ? next.delete(label) : next.add(label);
       return next;
     });
   };
 
-  // Seçili kök birimlerin tüm çocukları — dış kaynak dahil, alfabetik
   const visibleUnits = units
     .filter(u => u.parentId && selectedGroupIds.has(u.parentId))
     .sort((a, b) => a.name.localeCompare(b.name, 'tr'));
 
-  if (loading) return <div className="loading">Yükleniyor...</div>;
+  if (loading) return (
+    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', p: 8 }}>
+      <CircularProgress />
+    </Box>
+  );
 
   return (
     <div>
       <div className="page-header">
         <div>
-          <div className="page-title">Kaynak Planlama</div>
-          <div className="page-subtitle">{visibleUnits.length} bölüm</div>
+          <Typography variant="h6" fontWeight={700}>Kaynak Planlama</Typography>
+          <Typography variant="body2" color="text.secondary">{visibleUnits.length} bölüm</Typography>
         </div>
       </div>
 
-      {/* Filter bar */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-        {filterGroups.map(({ label, unit }) => {
-          const active = selectedFilters.has(label);
-          return (
-            <button
-              key={label}
-              onClick={() => toggleFilter(label)}
-              style={{
-                padding: '6px 14px',
-                borderRadius: 20,
-                border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
-                background: active ? 'var(--accent-dim)' : 'transparent',
-                color: active ? 'var(--accent)' : 'var(--text-secondary)',
-                fontSize: 13,
-                fontWeight: active ? 600 : 400,
-                cursor: 'pointer',
-                fontFamily: 'DM Sans, sans-serif',
-                transition: 'all 0.15s',
-                opacity: unit ? 1 : 0.4,
-              }}
-            >
-              {label}
-            </button>
-          );
-        })}
-      </div>
+      <Box sx={{ display: 'flex', gap: 1, mb: 3 }}>
+        {filterGroups.map(({ label, unit }) => (
+          <Chip
+            key={label}
+            label={label}
+            onClick={() => toggleFilter(label)}
+            color={selectedFilters.has(label) ? 'primary' : 'default'}
+            variant={selectedFilters.has(label) ? 'filled' : 'outlined'}
+            sx={{ cursor: 'pointer', opacity: unit ? 1 : 0.4 }}
+          />
+        ))}
+      </Box>
 
       {visibleUnits.length === 0 ? (
-        <div className="empty-state">
-          <p>Gösterilecek bölüm yok.</p>
-        </div>
+        <div className="empty-state"><p>Gösterilecek bölüm yok.</p></div>
       ) : (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))',
-          gap: 10,
-        }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))', gap: 10 }}>
           {visibleUnits.map(unit => (
-            <UnitCard
-              key={unit.id}
-              unit={unit}
-              personnel={personnel}
-              parentName={unitMap[unit.parentId]?.name}
-              onEdit={setEditing}
-            />
+            <UnitCard key={unit.id} unit={unit} personnel={personnel}
+              parentName={unitMap[unit.parentId]?.name} onEdit={setEditing} />
           ))}
         </div>
       )}
 
       {editing && (
-        <ManagerModal
-          unit={editing}
-          personnel={personnel}
+        <ManagerModal unit={editing} personnel={personnel}
           onSave={() => { setEditing(null); load(); }}
-          onClose={() => setEditing(null)}
-        />
+          onClose={() => setEditing(null)} />
       )}
     </div>
   );

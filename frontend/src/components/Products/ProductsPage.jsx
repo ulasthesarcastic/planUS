@@ -1,71 +1,64 @@
 import { useState, useEffect } from 'react';
 import { productApi, personnelApi } from '../../services/api';
 
+import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import TextField from '@mui/material/TextField';
+import Alert from '@mui/material/Alert';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Paper from '@mui/material/Paper';
+import Chip from '@mui/material/Chip';
+import Tooltip from '@mui/material/Tooltip';
+
+import AddIcon from '@mui/icons-material/Add';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import CloseIcon from '@mui/icons-material/Close';
+
 const TRL_DESCRIPTIONS = {
-  1: 'Temel prensipler gözlemlendi',
-  2: 'Teknoloji konsepti oluşturuldu',
-  3: 'Deneysel kanıt gösterildi',
-  4: 'Laboratuvar ortamında doğrulandı',
-  5: 'İlgili ortamda doğrulandı',
-  6: 'İlgili ortamda gösterildi',
-  7: 'Operasyonel ortamda prototip',
-  8: 'Sistem tamamlandı ve nitelendi',
-  9: 'Operasyonel ortamda başarıyla çalıştı',
+  1:'Temel prensipler gözlemlendi', 2:'Teknoloji konsepti oluşturuldu', 3:'Deneysel kanıt gösterildi',
+  4:'Laboratuvar ortamında doğrulandı', 5:'İlgili ortamda doğrulandı', 6:'İlgili ortamda gösterildi',
+  7:'Operasyonel ortamda prototip', 8:'Sistem tamamlandı ve nitelendi', 9:'Operasyonel ortamda başarıyla çalıştı',
 };
 
-function EditIcon() { return <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>; }
-function TrashIcon() { return <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>; }
-function PlusIcon() { return <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>; }
-function XIcon() { return <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>; }
+const TRL_COLORS = [null,'default','default','primary','primary','secondary','secondary','warning','warning','success'];
 
 function TrlBadge({ level }) {
-  const colors = [
-    null,
-    '#6b7280', '#6b7280', // 1-2 gri
-    '#2563eb', '#2563eb', // 3-4 mavi
-    '#7c3aed', '#7c3aed', // 5-6 mor
-    '#d97706', '#d97706', // 7-8 turuncu
-    '#16a34a',            // 9 yeşil
-  ];
-  return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 5,
-      padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700,
-      background: colors[level] + '22', color: colors[level], border: `1px solid ${colors[level]}44`,
-      fontFamily: 'DM Mono, monospace',
-    }}>
-      TRL {level}
-    </span>
-  );
+  return <Chip label={`TRL ${level}`} size="small" color={TRL_COLORS[level]} variant="outlined" sx={{ fontFamily: '"DM Mono", monospace', fontWeight: 700, height: 22, fontSize: '0.75rem' }} />;
 }
 
 function TrlSelector({ value, onChange }) {
   return (
-    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+    <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
       {[1,2,3,4,5,6,7,8,9].map(n => (
-        <button key={n} onClick={() => onChange(n)} style={{
-          width: 36, height: 36, borderRadius: 8, border: '1px solid',
-          borderColor: value === n ? 'var(--accent)' : 'var(--border)',
-          background: value === n ? 'var(--accent)' : 'var(--bg-card)',
-          color: value === n ? 'white' : 'var(--text-secondary)',
-          fontWeight: 700, fontSize: 13, cursor: 'pointer',
-          fontFamily: 'DM Mono, monospace', transition: 'all 0.15s',
-        }}>
-          {n}
-        </button>
+        <Tooltip key={n} title={TRL_DESCRIPTIONS[n]} placement="top">
+          <Box
+            onClick={() => onChange(n)}
+            sx={{
+              width: 36, height: 36, borderRadius: 2, border: '1px solid',
+              borderColor: value === n ? 'primary.main' : 'divider',
+              bgcolor: value === n ? 'primary.main' : 'background.paper',
+              color: value === n ? 'primary.contrastText' : 'text.secondary',
+              fontWeight: 700, fontSize: 13, cursor: 'pointer',
+              fontFamily: '"DM Mono", monospace', transition: 'all 0.15s',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              '&:hover': { borderColor: 'primary.main', bgcolor: value === n ? 'primary.main' : 'action.hover' },
+            }}
+          >{n}</Box>
+        </Tooltip>
       ))}
-    </div>
+    </Box>
   );
 }
 
 function ProductModal({ product, personnel, onSave, onClose }) {
   const isEdit = !!product;
-  const [form, setForm] = useState({
-    name: product?.name || '',
-    ownerId: product?.ownerId || '',
-    description: product?.description || '',
-    trlLevel: product?.trlLevel || 1,
-  });
+  const [form, setForm] = useState({ name: product?.name || '', ownerId: product?.ownerId || '', description: product?.description || '', trlLevel: product?.trlLevel || 1 });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -82,51 +75,32 @@ function ProductModal({ product, personnel, onSave, onClose }) {
   };
 
   return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal modal-lg">
-        <div className="modal-header">
-          <div className="modal-title">{isEdit ? 'Ürün Düzenle' : 'Yeni Ürün'}</div>
-          <button className="btn-icon" onClick={onClose}><XIcon /></button>
-        </div>
-        {error && <div className="alert alert-error">{error}</div>}
-
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">Ürün Adı</label>
-            <input className="form-input" autoFocus placeholder="Ürün adı" value={form.name} onChange={e => set('name', e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Ürün Sahibi <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(opsiyonel)</span></label>
-            <select className="form-select" value={form.ownerId} onChange={e => set('ownerId', e.target.value)}>
-              <option value="">— Seçilmedi —</option>
-              {personnel.map(p => <option key={p.id} value={p.id}>{p.firstName} {p.lastName}</option>)}
-            </select>
-          </div>
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">Açıklama <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(opsiyonel)</span></label>
-          <textarea className="form-input" placeholder="Ürün açıklaması..." value={form.description}
-            onChange={e => set('description', e.target.value)}
-            rows={3} style={{ resize: 'vertical', fontFamily: 'DM Sans, sans-serif' }} />
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">TRL Seviyesi</label>
+    <Dialog open onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        {isEdit ? 'Ürün Düzenle' : 'Yeni Ürün'}
+        <IconButton size="small" onClick={onClose}><CloseIcon fontSize="small" /></IconButton>
+      </DialogTitle>
+      <DialogContent>
+        {error && <Alert severity="error" sx={{ mb: 2, mt: 1 }}>{error}</Alert>}
+        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mt: 1, mb: 2 }}>
+          <TextField label="Ürün Adı" placeholder="Ürün adı" value={form.name} onChange={e => set('name', e.target.value)} autoFocus />
+          <TextField label="Ürün Sahibi (opsiyonel)" select value={form.ownerId} onChange={e => set('ownerId', e.target.value)} SelectProps={{ native: true }}>
+            <option value="">— Seçilmedi —</option>
+            {personnel.map(p => <option key={p.id} value={p.id}>{p.firstName} {p.lastName}</option>)}
+          </TextField>
+        </Box>
+        <TextField label="Açıklama (opsiyonel)" placeholder="Ürün açıklaması..." value={form.description} onChange={e => set('description', e.target.value)} multiline rows={3} fullWidth sx={{ mb: 2 }} />
+        <Box>
+          <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>TRL Seviyesi</Typography>
           <TrlSelector value={form.trlLevel} onChange={v => set('trlLevel', v)} />
-          <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-            TRL {form.trlLevel} — {TRL_DESCRIPTIONS[form.trlLevel]}
-          </div>
-        </div>
-
-        <div className="form-actions">
-          <button className="btn btn-ghost" onClick={onClose}>İptal</button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-            {saving ? 'Kaydediliyor...' : isEdit ? 'Güncelle' : 'Oluştur'}
-          </button>
-        </div>
-      </div>
-    </div>
+          <Typography variant="caption" color="text.disabled" sx={{ mt: 1, display: 'block', fontStyle: 'italic' }}>TRL {form.trlLevel} — {TRL_DESCRIPTIONS[form.trlLevel]}</Typography>
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button variant="outlined" onClick={onClose}>İptal</Button>
+        <Button variant="contained" onClick={handleSave} disabled={saving}>{saving ? 'Kaydediliyor...' : isEdit ? 'Güncelle' : 'Oluştur'}</Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 
@@ -142,30 +116,17 @@ export default function ProductsPage() {
 
   const load = async () => {
     const [prRes, perRes] = await Promise.all([productApi.getAll(), personnelApi.getAll()]);
-    setProducts(prRes.data);
-    setPersonnel(perRes.data);
-    setLoading(false);
+    setProducts(prRes.data); setPersonnel(perRes.data); setLoading(false);
   };
-
   useEffect(() => { load(); }, []);
 
-  const getOwnerName = (id) => {
-    if (!id) return '—';
-    const p = personnel.find(p => p.id === id);
-    return p ? `${p.firstName} ${p.lastName}` : '—';
-  };
+  const getOwnerName = (id) => { if (!id) return '—'; const p = personnel.find(p => p.id === id); return p ? `${p.firstName} ${p.lastName}` : '—'; };
+  const handleDelete = async (id) => { await productApi.delete(id); setDeleteConfirm(null); load(); };
 
-  const handleDelete = async (id) => {
-    await productApi.delete(id);
-    setDeleteConfirm(null);
-    load();
-  };
-
-  // TRL dağılımı için mini progress bar
   const trlGroups = [
-    { label: 'Araştırma (1-3)', min: 1, max: 3, color: '#6b7280' },
-    { label: 'Geliştirme (4-6)', min: 4, max: 6, color: '#7c3aed' },
-    { label: 'Olgunlaşma (7-9)', min: 7, max: 9, color: '#16a34a' },
+    { label: 'Araştırma (1-3)', min: 1, max: 3, color: 'text.disabled' },
+    { label: 'Geliştirme (4-6)', min: 4, max: 6, color: 'secondary.main' },
+    { label: 'Olgunlaşma (7-9)', min: 7, max: 9, color: 'success.main' },
   ];
 
   return (
@@ -175,35 +136,30 @@ export default function ProductsPage() {
           <div className="page-title">Ürün Yönetimi</div>
           <div className="page-subtitle">Ürünleri ve olgunluk seviyelerini yönetin</div>
         </div>
-        <button className="btn btn-primary" onClick={() => { setEditing(null); setModalOpen(true); }}>
-          <PlusIcon /> Yeni Ürün
-        </button>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setEditing(null); setModalOpen(true); }}>Yeni Ürün</Button>
       </div>
 
-      {/* TRL Özet Kartları */}
       {products.length > 0 && (
-        <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
+        <Box sx={{ display: 'flex', gap: 1.5, mb: 2.5 }}>
           {trlGroups.map(g => {
             const count = products.filter(p => p.trlLevel >= g.min && p.trlLevel <= g.max).length;
             return (
-              <div key={g.label} style={{ flex: 1, padding: '12px 16px', background: 'var(--bg-secondary)', borderRadius: 8, border: `1px solid ${g.color}33` }}>
-                <div style={{ fontSize: 11, color: g.color, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>{g.label}</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: g.color, fontFamily: 'DM Mono, monospace' }}>{count}</div>
-                <div style={{ marginTop: 6, height: 4, background: 'var(--bg-hover)', borderRadius: 2 }}>
-                  <div style={{ height: '100%', width: `${products.length ? (count/products.length)*100 : 0}%`, background: g.color, borderRadius: 2, transition: 'width 0.3s' }} />
-                </div>
-              </div>
+              <Paper key={g.label} variant="outlined" sx={{ flex: 1, p: 1.5, borderRadius: 2 }}>
+                <Typography variant="caption" color={g.color} sx={{ textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600, display: 'block', mb: 0.5 }}>{g.label}</Typography>
+                <Typography variant="h5" color={g.color} sx={{ fontFamily: '"DM Mono", monospace', fontWeight: 700, mb: 0.75 }}>{count}</Typography>
+                <Box sx={{ height: 4, bgcolor: 'action.hover', borderRadius: 1 }}>
+                  <Box sx={{ height: '100%', width: `${products.length ? (count/products.length)*100 : 0}%`, bgcolor: g.color, borderRadius: 1, transition: 'width 0.3s' }} />
+                </Box>
+              </Paper>
             );
           })}
-        </div>
+        </Box>
       )}
 
       <div className="card">
-        {loading ? (
-          <div className="loading">Yükleniyor...</div>
-        ) : products.length === 0 ? (
-          <div className="empty-state"><p>Henüz ürün eklenmemiş.</p></div>
-        ) : (
+        {loading ? <div className="loading">Yükleniyor...</div>
+          : products.length === 0 ? <div className="empty-state"><p>Henüz ürün eklenmemiş.</p></div>
+          : (
           <div className="table-wrapper">
             <table>
               <thead>
@@ -230,15 +186,14 @@ export default function ProductsPage() {
                     <td style={{ fontWeight: 600 }}>{p.name}</td>
                     <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{getOwnerName(p.ownerId)}</td>
                     <td>
-                      <div>
-                        <TrlBadge level={p.trlLevel} />
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>{TRL_DESCRIPTIONS[p.trlLevel]}</div>
-                      </div>
+                      <TrlBadge level={p.trlLevel} />
+                      <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.25 }}>{TRL_DESCRIPTIONS[p.trlLevel]}</Typography>
                     </td>
+                    <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{p.description || '—'}</td>
                     <td>
                       <div className="actions-cell">
-                        <button className="btn-icon" onClick={() => { setEditing(p); setModalOpen(true); }}><EditIcon /></button>
-                        <button className="btn-icon danger" onClick={() => setDeleteConfirm(p)}><TrashIcon /></button>
+                        <IconButton size="small" onClick={() => { setEditing(p); setModalOpen(true); }}><EditOutlinedIcon sx={{ fontSize: 16 }} /></IconButton>
+                        <IconButton size="small" color="error" onClick={() => setDeleteConfirm(p)}><DeleteOutlineIcon sx={{ fontSize: 16 }} /></IconButton>
                       </div>
                     </td>
                   </tr>
@@ -249,26 +204,18 @@ export default function ProductsPage() {
         )}
       </div>
 
-      {modalOpen && (
-        <ProductModal product={editing} personnel={personnel}
-          onSave={() => { setModalOpen(false); load(); }}
-          onClose={() => setModalOpen(false)} />
-      )}
+      {modalOpen && <ProductModal product={editing} personnel={personnel} onSave={() => { setModalOpen(false); load(); }} onClose={() => setModalOpen(false)} />}
 
-      {deleteConfirm && (
-        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setDeleteConfirm(null)}>
-          <div className="modal" style={{ maxWidth: 400 }}>
-            <div className="modal-title" style={{ marginBottom: 12 }}>Ürünü Sil</div>
-            <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 16 }}>
-              <strong style={{ color: 'var(--text-primary)' }}>{deleteConfirm.name}</strong> ürününü silmek istediğinizden emin misiniz?
-            </p>
-            <div className="form-actions" style={{ marginTop: 8, paddingTop: 16 }}>
-              <button className="btn btn-ghost" onClick={() => setDeleteConfirm(null)}>İptal</button>
-              <button className="btn" style={{ background: 'var(--danger)', color: 'white' }} onClick={() => handleDelete(deleteConfirm.id)}>Sil</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Dialog open={!!deleteConfirm} onClose={() => setDeleteConfirm(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Ürünü Sil</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary"><strong>{deleteConfirm?.name}</strong> ürününü silmek istediğinizden emin misiniz?</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button variant="outlined" onClick={() => setDeleteConfirm(null)}>İptal</Button>
+          <Button variant="contained" color="error" onClick={() => handleDelete(deleteConfirm.id)}>Sil</Button>
+        </DialogActions>
+      </Dialog>
     </div>
   );
 }
