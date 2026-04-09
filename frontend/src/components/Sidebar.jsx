@@ -17,7 +17,7 @@ const Icons = {
   Grid:     () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>,
 };
 
-const SETTINGS_ROUTES = ['/seniorities', '/personnel', '/organization', '/project-types'];
+const SETTINGS_ROUTES = ['/seniorities', '/personnel', '/organization', '/project-types', '/project-categories'];
 
 export default function Sidebar() {
   const location = useLocation();
@@ -76,6 +76,9 @@ export default function Sidebar() {
             <NavLink to="/project-types" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Proje Tipleri">
               <Icons.Folder />{!collapsed && <span className="nav-item-label">Proje Tipleri</span>}
             </NavLink>
+            <NavLink to="/project-categories" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Proje Kategorileri">
+              <Icons.Grid />{!collapsed && <span className="nav-item-label">Proje Kategorileri</span>}
+            </NavLink>
             {!collapsed && <div className="sidebar-section-label" style={{ marginTop: 8 }}>Kaynaklar</div>}
             <NavLink to="/seniorities" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Kıdem Yönetimi">
               <Icons.Award />{!collapsed && <span className="nav-item-label">Kıdem Yönetimi</span>}
@@ -118,8 +121,11 @@ export default function Sidebar() {
               <NavLink to="/budget" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Bütçe Yönetimi">
                 <Icons.DollarSign />{!collapsed && <span className="nav-item-label">Bütçe Yönetimi</span>}
               </NavLink>
-              <NavLink to="/sales" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Potansiyel Satışlar">
-                <Icons.Box />{!collapsed && <span className="nav-item-label">Potansiyel Satışlar</span>}
+              <NavLink to="/sales" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Potansiyel Projeler">
+                <Icons.TrendUp />{!collapsed && <span className="nav-item-label">Potansiyel Projeler</span>}
+              </NavLink>
+              <NavLink to="/potansiyel-siparisler" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Potansiyel Siparişler">
+                <Icons.Box />{!collapsed && <span className="nav-item-label">Potansiyel Siparişler</span>}
               </NavLink>
             </div>
           </>

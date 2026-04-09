@@ -1,7 +1,7 @@
 package com.projectmanager.controller;
 
 import com.projectmanager.model.ProjectType;
-import com.projectmanager.service.ProjectTypeService;
+import com.projectmanager.repository.ProjectTypeRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -11,33 +11,33 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/project-types")
 public class ProjectTypeController {
+    private final ProjectTypeRepository repo;
 
-    private final ProjectTypeService service;
-
-    public ProjectTypeController(ProjectTypeService service) { this.service = service; }
+    public ProjectTypeController(ProjectTypeRepository repo) { this.repo = repo; }
 
     @GetMapping
-    public List<ProjectType> getAll() { return service.getAll(); }
+    public List<ProjectType> getAll() { return repo.findAllByOrderBySortOrderAsc(); }
 
     @PostMapping
-    public ResponseEntity<?> create(@RequestBody ProjectType type) {
-        try { return ResponseEntity.ok(service.create(type)); }
-        catch (IllegalArgumentException e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
+    public ResponseEntity<?> create(@RequestBody ProjectType pt) {
+        if (pt.getName() == null || pt.getName().isBlank())
+            return ResponseEntity.badRequest().body(Map.of("error", "İsim zorunludur."));
+        return ResponseEntity.ok(repo.save(pt));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<?> update(@PathVariable String id, @RequestBody ProjectType type) {
-        try {
-            return service.update(id, type)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
-        } catch (IllegalArgumentException e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
+    public ResponseEntity<?> update(@PathVariable String id, @RequestBody ProjectType pt) {
+        return repo.findById(id).map(existing -> {
+            existing.setName(pt.getName());
+            existing.setColor(pt.getColor());
+            existing.setSortOrder(pt.getSortOrder());
+            return ResponseEntity.ok(repo.save(existing));
+        }).orElse(ResponseEntity.notFound().build());
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<?> delete(@PathVariable String id) {
-        try {
-            return service.delete(id) ? ResponseEntity.ok().build() : ResponseEntity.notFound().build();
-        } catch (IllegalStateException e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
+        repo.deleteById(id);
+        return ResponseEntity.ok().build();
     }
 }

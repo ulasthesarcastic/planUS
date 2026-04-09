@@ -9,10 +9,12 @@ import ProjectsPage from './components/Projects/ProjectsPage';
 import ProductsPage from './components/Products/ProductsPage';
 import OrganizationPage from './components/Organization/OrganizationPage';
 import SalesPage from './components/Sales/SalesPage';
+import PotansiyelSiparislerPage from './components/Sales/PotansiyelSiparislerPage';
 import BudgetPage from './components/Budget/BudgetPage';
 import ResourcePlanningPage from './components/ResourcePlanning/ResourcePlanningPage';
 import PnLPage from './components/PnL/PnLPage';
 import ProjectTypesPage from './components/ProjectTypes/ProjectTypesPage';
+import ProjectCategoriesPage from './components/ProjectCategories/ProjectCategoriesPage';
 import './styles/global.css';
 
 function UserIcon() {
@@ -214,7 +216,9 @@ function AppContent() {
             <Route path="/resource-planning" element={<ResourcePlanningPage />} />
             <Route path="/pnl" element={<PnLPage />} />
             <Route path="/project-types" element={<ProjectTypesPage />} />
+            <Route path="/project-categories" element={<ProjectCategoriesPage />} />
             <Route path="/sales" element={<SalesPage />} />
+            <Route path="/potansiyel-siparisler" element={<PotansiyelSiparislerPage />} />
             <Route path="/budget" element={<BudgetPage />} />
           </Routes>
         </main>

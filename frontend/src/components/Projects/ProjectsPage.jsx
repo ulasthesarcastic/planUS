@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
-import { projectApi, personnelApi, productApi, organizationApi, seniorityApi, potentialSaleApi, projectTypeApi } from '../../services/api';
+import { projectApi, personnelApi, productApi, organizationApi, seniorityApi, potentialSaleApi, projectTypeApi, projectCategoryApi } from '../../services/api';
 import SearchableSelect from '../SearchableSelect';
 
 const MONTHS = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran',
@@ -584,7 +584,7 @@ function PlanningTab({ project, allPersonnel, units, seniorities, onReload }) {
 }
 
 // ── Project card with budget analysis coloring ───────────────────────────────
-function ProjectCard({ project, personnel, personnelMap, seniorityMap, onClick, onEdit, onDelete }) {
+function ProjectCard({ project, personnel, personnelMap, seniorityMap, categoryMap = {}, stepMap = {}, onClick, onEdit, onDelete }) {
   const mgr = personnel.find(p => String(p.id) === String(project.projectManagerId));
   const analysis = (personnelMap && seniorityMap) ? analyzeBudget(project, personnelMap, seniorityMap) : { status: 'nodata' };
   const isAcik = analysis.status === 'acik';
@@ -600,7 +600,7 @@ function ProjectCard({ project, personnel, personnelMap, seniorityMap, onClick, 
         background: isAcik ? 'rgba(248,113,113,0.08)' : 'var(--bg-card)',
         boxShadow: hovered ? '0 2px 14px rgba(99,102,241,0.12)' : isAcik ? '0 0 0 1px rgba(248,113,113,0.25)' : 'none',
       }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10, gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
         <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', flex: 1 }}>{project.name}</div>
         <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignItems: 'center' }}>
           {isAcik && (
@@ -614,6 +614,25 @@ function ProjectCard({ project, personnel, personnelMap, seniorityMap, onClick, 
           </div>
         </div>
       </div>
+      {/* Category + Status badges */}
+      {(project.categoryId || project.currentStepId) && (
+        <div style={{ display: 'flex', gap: 4, marginBottom: 8, flexWrap: 'wrap' }}>
+          {project.categoryId && categoryMap[project.categoryId] && (
+            <span style={{
+              fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+              background: `${categoryMap[project.categoryId].color || 'var(--accent)'}22`,
+              color: categoryMap[project.categoryId].color || 'var(--accent)',
+            }}>{categoryMap[project.categoryId].name}</span>
+          )}
+          {project.currentStepId && stepMap[project.currentStepId] && (
+            <span style={{
+              fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
+              background: 'var(--bg-hover)', color: 'var(--text-secondary)',
+              border: '1px solid var(--border)',
+            }}>{stepMap[project.currentStepId].label}</span>
+          )}
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px' }}>
         <div style={{ fontSize: 11 }}>
           <span style={{ color: 'var(--text-secondary)' }}>Proje Yöneticisi: </span>
@@ -652,7 +671,7 @@ function ProjectCard({ project, personnel, personnelMap, seniorityMap, onClick, 
   );
 }
 
-function EmySectionProjects({ name, projects, personnel, personnelMap, seniorityMap, onSelectProject, onEdit, onDelete, defaultOpen }) {
+function EmySectionProjects({ name, projects, personnel, personnelMap, seniorityMap, categoryMap, stepMap, onSelectProject, onEdit, onDelete, defaultOpen }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div style={{ marginBottom: 8, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
@@ -666,6 +685,7 @@ function EmySectionProjects({ name, projects, personnel, personnelMap, seniority
         <div style={{ padding: '12px 16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))', gap: 10 }}>
           {projects.map(p => (
             <ProjectCard key={p.id} project={p} personnel={personnel} personnelMap={personnelMap} seniorityMap={seniorityMap}
+              categoryMap={categoryMap} stepMap={stepMap}
               onClick={() => onSelectProject(p)}
               onEdit={onEdit}
               onDelete={onDelete}
@@ -693,9 +713,10 @@ function MonthYearSelect({ month, year, onMonthChange, onYearChange, allowEmpty 
 }
 
 // ── PROJE FORMU MODALI ──────────────────────────────────────────
-function ProjectModal({ project, personnel, projectTypes = [], onSave, onClose }) {
+function ProjectModal({ project, personnel, projectTypes = [], categories = [], onSave, onClose }) {
   const isEdit = !!project;
   const [units, setUnits] = useState([]);
+  const [workflowSteps, setWorkflowSteps] = useState([]);
   const [form, setForm] = useState(project ? {
     name: project.name, customerName: project.customerName || '',
     startMonth: project.startMonth, startYear: project.startYear,
@@ -705,12 +726,14 @@ function ProjectModal({ project, personnel, projectTypes = [], onSave, onClose }
     techLeadId: project.techLeadId || '',
     unitId: project.unitId || '',
     projectType: project.projectType || '',
+    categoryId: project.categoryId || '',
+    currentStepId: project.currentStepId || '',
   } : {
     name: '', customerName: '',
     startMonth: new Date().getMonth()+1, startYear: currentYear,
     endMonth: new Date().getMonth()+1, endYear: currentYear+1,
     budget: '', budgetCurrency: 'TRY', projectManagerId: '', techLeadId: '',
-    unitId: '', projectType: '',
+    unitId: '', projectType: '', categoryId: '', currentStepId: '',
   });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -722,6 +745,14 @@ function ProjectModal({ project, personnel, projectTypes = [], onSave, onClose }
       organizationApi.getAll().then(res => setUnits(res.data));
     });
   }, []);
+
+  // Load workflow steps when category changes
+  useEffect(() => {
+    if (!form.categoryId) { setWorkflowSteps([]); return; }
+    projectCategoryApi.getWorkflow(form.categoryId)
+      .then(res => setWorkflowSteps(res.data || []))
+      .catch(() => setWorkflowSteps([]));
+  }, [form.categoryId]);
 
   const rootUnits = units.filter(u => !u.parentId);
 
@@ -808,19 +839,50 @@ function ProjectModal({ project, personnel, projectTypes = [], onSave, onClose }
             <input className="form-input" placeholder="Müşteri adı" value={form.customerName} onChange={e => set('customerName', e.target.value)} />
           </div>
         </div>
-        <div className="form-group">
-          <label className="form-label">Proje Tipi</label>
-          <SearchableSelect
-            value={form.projectType || ''}
-            onChange={v => set('projectType', v)}
-            placeholder="— Seçilmedi —"
-            style={{ width: '100%' }}
-            options={[
-              { value: '', label: '— Seçilmedi —' },
-              ...projectTypes.map(t => ({ value: t.id, label: t.name })),
-            ]}
-          />
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Proje Tipi</label>
+            <SearchableSelect
+              value={form.projectType || ''}
+              onChange={v => set('projectType', v)}
+              placeholder="— Seçilmedi —"
+              style={{ width: '100%' }}
+              options={[
+                { value: '', label: '— Seçilmedi —' },
+                ...projectTypes.map(t => ({ value: t.id, label: t.name })),
+              ]}
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Kategori</label>
+            <SearchableSelect
+              value={form.categoryId || ''}
+              onChange={v => { set('categoryId', v); set('currentStepId', ''); }}
+              placeholder="— Seçilmedi —"
+              style={{ width: '100%' }}
+              options={[
+                { value: '', label: '— Seçilmedi —' },
+                ...categories.map(c => ({ value: c.id, label: c.name })),
+              ]}
+            />
+          </div>
         </div>
+        {workflowSteps.length > 0 && (
+          <div className="form-group">
+            <label className="form-label">Proje Statüsü</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {workflowSteps.map(step => (
+                <button key={step.id} onClick={() => set('currentStepId', step.id)} style={{
+                  padding: '6px 14px', borderRadius: 20, cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                  border: `2px solid ${form.currentStepId === step.id ? (categories.find(c => c.id === form.categoryId)?.color || 'var(--accent)') : 'var(--border)'}`,
+                  background: form.currentStepId === step.id ? `${categories.find(c => c.id === form.categoryId)?.color || 'var(--accent)'}22` : 'var(--bg-secondary)',
+                  color: form.currentStepId === step.id ? (categories.find(c => c.id === form.categoryId)?.color || 'var(--accent)') : 'var(--text-muted)',
+                  fontFamily: 'DM Sans, sans-serif',
+                }}>{step.label}</button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="form-row" style={{ marginBottom: 16 }}>
           <div>
             <div className="form-label">Başlangıç Tarihi</div>
@@ -1616,6 +1678,8 @@ export default function ProjectsPage() {
   const [seniorities, setSeniorities] = useState([]);
   const [potentialSalesAll, setPotentialSalesAll] = useState([]);
   const [projectTypes, setProjectTypes] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [allSteps, setAllSteps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedProject, setSelectedProject] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -1632,6 +1696,8 @@ export default function ProjectsPage() {
 
   const personnelMap = Object.fromEntries(personnel.map(p => [String(p.id), p]));
   const seniorityMap = Object.fromEntries(seniorities.map(s => [String(s.id), s]));
+  const categoryMap  = Object.fromEntries(categories.map(c => [String(c.id), c]));
+  const stepMap      = Object.fromEntries(allSteps.map(s => [String(s.id), s]));
 
   const load = async () => {
     const [pRes, perRes, prRes, uRes, sRes, psRes] = await Promise.all([
@@ -1644,6 +1710,12 @@ export default function ProjectsPage() {
     setSeniorities(sRes.data);
     setPotentialSalesAll(psRes.data);
     projectTypeApi.getAll().then(ptRes => setProjectTypes(ptRes.data)).catch(() => {});
+    projectCategoryApi.getAll().then(async cRes => {
+      const cats = cRes.data || [];
+      setCategories(cats);
+      const stepArrays = await Promise.all(cats.map(c => projectCategoryApi.getWorkflow(c.id).then(r => r.data).catch(() => [])));
+      setAllSteps(stepArrays.flat());
+    }).catch(() => {});
     setLoading(false);
   };
 
@@ -1685,7 +1757,7 @@ export default function ProjectsPage() {
           onUpdate={refreshSelected}
         />
         {modalOpen && (
-          <ProjectModal project={editing} personnel={personnel} projectTypes={projectTypes}
+          <ProjectModal project={editing} personnel={personnel} projectTypes={projectTypes} categories={categories}
             onSave={() => { setModalOpen(false); refreshSelected(); }}
             onClose={() => setModalOpen(false)} />
         )}
@@ -1738,6 +1810,8 @@ export default function ProjectsPage() {
           personnel={personnel}
           personnelMap={personnelMap}
           seniorityMap={seniorityMap}
+          categoryMap={categoryMap}
+          stepMap={stepMap}
           onSelectProject={setSelectedProject}
           onEdit={p => { setEditing(p); setModalOpen(true); }}
           onDelete={p => setDeleteConfirm(p)}
@@ -1750,6 +1824,7 @@ export default function ProjectsPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))', gap: 10 }}>
         {sorted.map(p => (
           <ProjectCard key={p.id} project={p} personnel={personnel} personnelMap={personnelMap} seniorityMap={seniorityMap}
+            categoryMap={categoryMap} stepMap={stepMap}
             onClick={() => setSelectedProject(p)}
             onEdit={proj => { setEditing(proj); setModalOpen(true); }}
             onDelete={proj => setDeleteConfirm(proj)}
@@ -1792,7 +1867,7 @@ export default function ProjectsPage() {
       }
 
       {modalOpen && (
-        <ProjectModal project={editing} personnel={personnel} projectTypes={projectTypes}
+        <ProjectModal project={editing} personnel={personnel} projectTypes={projectTypes} categories={categories}
           onSave={() => { setModalOpen(false); load(); if (selectedProject) refreshSelected(); }}
           onClose={() => setModalOpen(false)} />
       )}

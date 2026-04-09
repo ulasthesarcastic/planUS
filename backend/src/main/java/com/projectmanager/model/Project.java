@@ -17,6 +17,8 @@ public class Project {
 
     private String customerName;
     private String projectType;
+    private String categoryId;   // FK → ProjectCategory.id
+    private String currentStepId; // FK → WorkflowStep.id (current workflow status)
     private int startMonth;
     private int startYear;
     private int endMonth;
@@ -64,6 +66,10 @@ public class Project {
     public void setName(String name) { this.name = name; }
     public String getProjectType() { return projectType; }
     public void setProjectType(String projectType) { this.projectType = projectType; }
+    public String getCategoryId() { return categoryId; }
+    public void setCategoryId(String categoryId) { this.categoryId = categoryId; }
+    public String getCurrentStepId() { return currentStepId; }
+    public void setCurrentStepId(String currentStepId) { this.currentStepId = currentStepId; }
     public String getCustomerName() { return customerName; }
     public void setCustomerName(String customerName) { this.customerName = customerName; }
     public int getStartMonth() { return startMonth; }

@@ -20,10 +20,10 @@ const emptySale = () => ({
   targetYear: new Date().getFullYear(), status: 'AKTIF',
 });
 
-function PlusIcon()   { return <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>; }
-function EditIcon()   { return <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>; }
-function TrashIcon()  { return <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>; }
-function XIcon()      { return <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>; }
+function PlusIcon()  { return <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>; }
+function EditIcon()  { return <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>; }
+function TrashIcon() { return <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>; }
+function XIcon()     { return <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>; }
 
 function SaleModal({ sale, projects, onSave, onClose }) {
   const isEdit = !!sale?.id;
@@ -45,7 +45,7 @@ function SaleModal({ sale, projects, onSave, onClose }) {
   };
 
   const handleSave = async () => {
-    if (!form.name.trim()) return setError('Proje adı zorunludur.');
+    if (!form.name.trim()) return setError('Sipariş adı zorunludur.');
     setSaving(true);
     try {
       const prob = parseFloat(form.probability) || 0;
@@ -63,13 +63,13 @@ function SaleModal({ sale, projects, onSave, onClose }) {
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal">
         <div className="modal-header">
-          <div className="modal-title">{isEdit ? 'Proje Düzenle' : 'Yeni Potansiyel Proje'}</div>
+          <div className="modal-title">{isEdit ? 'Sipariş Düzenle' : 'Yeni Potansiyel Sipariş'}</div>
           <button className="btn-icon" onClick={onClose}><XIcon /></button>
         </div>
         {error && <div className="alert alert-error">{error}</div>}
 
         <div className="form-group">
-          <label className="form-label">Proje Adı</label>
+          <label className="form-label">Sipariş Adı</label>
           <input className="form-input" value={form.name}
             onChange={e => setForm(f => ({ ...f, name: e.target.value }))} autoFocus />
         </div>
@@ -157,7 +157,7 @@ function SaleModal({ sale, projects, onSave, onClose }) {
   );
 }
 
-function ProjectCard({ s, projectName, onEdit, onDelete }) {
+function OrderCard({ s, projectName, categoryName, categoryColor, onEdit, onDelete }) {
   const [hovered, setHovered] = useState(false);
   const cfg = STATUS_CFG[s.status] || STATUS_CFG.AKTIF;
   const estimated = (s.amount || 0) * (s.probability || 0) / 100;
@@ -177,10 +177,19 @@ function ProjectCard({ s, projectName, onEdit, onDelete }) {
     >
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{
-          fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
-          background: cfg.bg, color: cfg.color,
-        }}>{cfg.label}</span>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{
+            fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
+            background: cfg.bg, color: cfg.color,
+          }}>{cfg.label}</span>
+          {categoryName && (
+            <span style={{
+              fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 20,
+              background: `${categoryColor}22`, color: categoryColor,
+              border: `1px solid ${categoryColor}44`,
+            }}>{categoryName}</span>
+          )}
+        </div>
         <div style={{ display: 'flex', gap: 2 }}>
           <button className="btn-icon" onClick={() => onEdit(s)} style={{ padding: 4 }}><EditIcon /></button>
           <button className="btn-icon danger" onClick={() => onDelete(s)} style={{ padding: 4 }}><TrashIcon /></button>
@@ -226,7 +235,7 @@ function ProjectCard({ s, projectName, onEdit, onDelete }) {
   );
 }
 
-export default function SalesPage() {
+export default function PotansiyelSiparislerPage() {
   const [sales, setSales] = useState([]);
   const [projects, setProjects] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -249,35 +258,53 @@ export default function SalesPage() {
 
   useEffect(() => { load(); }, []);
 
+  // Build maps for lookups
   const projectMap = Object.fromEntries(projects.map(p => [String(p.id), p]));
   const categoryMap = Object.fromEntries(categories.map(c => [c.id, c]));
 
-  // Only show sales linked to PROJE category (or no project / no category)
-  const projeSales = sales.filter(s => {
-    if (!s.projectId) return true; // no linked project → show in Projeler
+  // Only show sales linked to URUN or HIZMET category projects
+  const siparisler = sales.filter(s => {
+    if (!s.projectId) return false;
     const project = projectMap[String(s.projectId)];
-    if (!project || !project.categoryId) return true; // no category → show in Projeler
+    if (!project || !project.categoryId) return false;
     const cat = categoryMap[project.categoryId];
-    return !cat || cat.categoryType === 'PROJE';
+    return cat?.categoryType === 'URUN' || cat?.categoryType === 'HIZMET';
   });
 
-  // Projects for modal: only PROJE type (or no category)
-  const projeProjects = projects.filter(p => {
-    if (!p.categoryId) return true;
+  // Projects available for Siparişler = URUN or HIZMET type
+  const siparisProjects = projects.filter(p => {
+    if (!p.categoryId) return false;
     const cat = categoryMap[p.categoryId];
-    return !cat || cat.categoryType === 'PROJE';
+    return cat?.categoryType === 'URUN' || cat?.categoryType === 'HIZMET';
   });
 
-  const getProjectName = (id) => id ? (projectMap[String(id)]?.name || '') : '';
-  const filtered = projeSales.filter(s => statusFilter === 'ALL' || s.status === statusFilter);
-  const totalEstimated = projeSales.filter(s => s.status === 'AKTIF').reduce((sum, s) => sum + (s.amount || 0) * (s.probability || 0) / 100, 0);
+  const getProjectInfo = (projectId) => {
+    if (!projectId) return { name: '', categoryName: '', categoryColor: '' };
+    const project = projectMap[String(projectId)];
+    if (!project) return { name: '', categoryName: '', categoryColor: '' };
+    const cat = project.categoryId ? categoryMap[project.categoryId] : null;
+    return {
+      name: project.name,
+      categoryName: cat?.name || '',
+      categoryColor: cat?.color || '#94a3b8',
+    };
+  };
+
+  const filtered = siparisler.filter(s => statusFilter === 'ALL' || s.status === statusFilter);
+  const totalEstimated = siparisler.filter(s => s.status === 'AKTIF').reduce((sum, s) => sum + (s.amount || 0) * (s.probability || 0) / 100, 0);
 
   const summaryCards = [
-    { label: 'Toplam',     value: projeSales.length,                                          color: 'var(--accent)',       mono: false },
-    { label: 'Aktif',      value: projeSales.filter(s => s.status === 'AKTIF').length,        color: 'var(--text-primary)', mono: false },
-    { label: 'Kazanıldı',  value: projeSales.filter(s => s.status === 'KAZANILDI').length,    color: '#34c97a',             mono: false },
+    { label: 'Toplam',     value: siparisler.length,                                          color: 'var(--accent)',       mono: false },
+    { label: 'Aktif',      value: siparisler.filter(s => s.status === 'AKTIF').length,        color: 'var(--text-primary)', mono: false },
+    { label: 'Kazanıldı',  value: siparisler.filter(s => s.status === 'KAZANILDI').length,    color: '#34c97a',             mono: false },
     { label: 'Tahminlenen',value: fmt(totalEstimated) + ' ₺',                                 color: '#34c97a',             mono: true  },
   ];
+
+  const handleDelete = async (s) => {
+    await potentialSaleApi.delete(s.id);
+    setDeleteConfirm(null);
+    load();
+  };
 
   if (loading) return <div className="loading">Yükleniyor...</div>;
 
@@ -285,11 +312,11 @@ export default function SalesPage() {
     <div>
       <div className="page-header">
         <div>
-          <div className="page-title">Potansiyel Projeler</div>
-          <div className="page-subtitle">{projeSales.length} proje takip ediliyor</div>
+          <div className="page-title">Potansiyel Siparişler</div>
+          <div className="page-subtitle">{siparisler.length} sipariş takip ediliyor</div>
         </div>
         <button className="btn btn-primary" onClick={() => setEditing({})}>
-          <PlusIcon /> Yeni Proje
+          <PlusIcon /> Yeni Sipariş
         </button>
       </div>
 
@@ -313,31 +340,41 @@ export default function SalesPage() {
             color: statusFilter === key ? (STATUS_CFG[key]?.color || 'var(--accent)') : 'var(--text-secondary)',
             fontFamily: 'DM Sans, sans-serif',
           }}>
-            {label} ({key === 'ALL' ? projeSales.length : projeSales.filter(s => s.status === key).length})
+            {label} ({key === 'ALL' ? siparisler.length : siparisler.filter(s => s.status === key).length})
           </button>
         ))}
       </div>
 
       {/* Cards grid */}
       {filtered.length === 0 ? (
-        <div className="empty-state"><p>Gösterilecek proje yok.</p></div>
+        <div className="empty-state">
+          <p>Gösterilecek sipariş yok.</p>
+          <p style={{ fontSize: 12, marginTop: 8, color: 'var(--text-muted)' }}>
+            Ürün ve hizmet projelerine bağlı siparişler burada görünür.
+          </p>
+        </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-          {filtered.map(s => (
-            <ProjectCard
-              key={s.id} s={s}
-              projectName={getProjectName(s.projectId)}
-              onEdit={setEditing}
-              onDelete={setDeleteConfirm}
-            />
-          ))}
+          {filtered.map(s => {
+            const info = getProjectInfo(s.projectId);
+            return (
+              <OrderCard
+                key={s.id} s={s}
+                projectName={info.name}
+                categoryName={info.categoryName}
+                categoryColor={info.categoryColor}
+                onEdit={setEditing}
+                onDelete={setDeleteConfirm}
+              />
+            );
+          })}
         </div>
       )}
 
       {editing !== null && (
         <SaleModal
           sale={editing?.id ? editing : null}
-          projects={projeProjects}
+          projects={siparisProjects}
           onSave={() => { setEditing(null); load(); }}
           onClose={() => setEditing(null)}
         />
@@ -346,16 +383,13 @@ export default function SalesPage() {
       {deleteConfirm && (
         <div className="modal-overlay" onClick={() => setDeleteConfirm(null)}>
           <div className="modal" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
-            <div className="modal-title" style={{ marginBottom: 8 }}>Projeyi Sil</div>
+            <div className="modal-title" style={{ marginBottom: 8 }}>Siparişi Sil</div>
             <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 16 }}>
               <strong>{deleteConfirm.name}</strong> silinecek.
             </p>
             <div className="form-actions">
               <button className="btn btn-ghost" onClick={() => setDeleteConfirm(null)}>İptal</button>
-              <button className="btn btn-danger" onClick={async () => {
-                await potentialSaleApi.delete(deleteConfirm.id);
-                setDeleteConfirm(null); load();
-              }}>Sil</button>
+              <button className="btn btn-danger" onClick={() => handleDelete(deleteConfirm)}>Sil</button>
             </div>
           </div>
         </div>

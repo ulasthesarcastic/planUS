@@ -69,3 +69,12 @@ export const projectTypeApi = {
   update: (id, data) => API.put(`/project-types/${id}`, data),
   delete: (id) => API.delete(`/project-types/${id}`),
 };
+
+export const projectCategoryApi = {
+  getAll: () => API.get('/project-categories'),
+  create: (data) => API.post('/project-categories', data),
+  update: (id, data) => API.put(`/project-categories/${id}`, data),
+  delete: (id) => API.delete(`/project-categories/${id}`),
+  getWorkflow: (categoryId) => API.get(`/project-categories/${categoryId}/workflow`),
+  saveWorkflow: (categoryId, steps) => API.put(`/project-categories/${categoryId}/workflow`, steps),
+};
