@@ -504,7 +504,7 @@ function PlanningTab({ project, allPersonnel, units, seniorities, onReload }) {
                   </tr>,
                   ...grp.people.map((person, pi) => (
                     <tr key={person.id} style={{ borderBottom: '1px solid var(--border)', background: pi % 2 === 0 ? 'transparent' : 'var(--bg-hover)' }}>
-                      <td style={{ padding: '3px 12px', position: 'sticky', left: 0, zIndex: 1, background: pi % 2 === 0 ? 'var(--bg-card)' : 'var(--bg-alt-row)', borderRight: '2px solid var(--border)', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '3px 12px', position: 'sticky', left: 0, zIndex: 1, background: pi % 2 === 0 ? 'var(--bg-card)' : 'var(--bg-secondary)', borderRight: '2px solid var(--border)', whiteSpace: 'nowrap' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                           <span style={{ fontWeight: 500, fontSize: 12, color: grp.nameColor }}>{person.firstName} {person.lastName}</span>
                           <button onClick={() => setBulkPerson(person)} title="Toplu atama"

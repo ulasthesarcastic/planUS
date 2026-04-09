@@ -238,6 +238,7 @@ function MonthlyGrid({ monthlyData }) {
         {/* Rows */}
         {ROWS.map(({ key, label, bold, color, expandable }, ri) => {
           const rowBg = ri % 2 === 0 ? 'var(--bg-card)' : 'var(--bg-alt-row)';
+          const stickyBg = ri % 2 === 0 ? 'var(--bg-card)' : 'var(--bg-secondary)';
           const isExp = expandable && expandedRow === expandable;
           const toggleExp = expandable
             ? () => setExpandedRow(r => r === expandable ? null : expandable)
@@ -252,7 +253,7 @@ function MonthlyGrid({ monthlyData }) {
               {/* Ana satır */}
               <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: rowBg }}>
                 <div
-                  style={{ ...stickyCell(rowBg), color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4, cursor: expandable ? 'pointer' : 'default' }}
+                  style={{ ...stickyCell(stickyBg), color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4, cursor: expandable ? 'pointer' : 'default' }}
                   onClick={toggleExp}
                 >
                   {expandable && (
