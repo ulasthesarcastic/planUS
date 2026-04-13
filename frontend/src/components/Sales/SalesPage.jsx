@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { potentialSaleApi, projectApi, projectCategoryApi } from '../../services/api';
 import SearchableSelect from '../SearchableSelect';
 
@@ -35,6 +36,7 @@ function SaleModal({ sale, projects, onSave, onClose }) {
     let prob = form.probability;
     if (status === 'KAZANILDI') prob = 100;
     else if (status === 'KAYBEDILDI') prob = 0;
+    else if (status === 'AKTIF' && (prob === 100 || prob === 0)) prob = 50; // sıfırla
     setForm(f => ({ ...f, status, probability: prob }));
   };
 
@@ -49,8 +51,7 @@ function SaleModal({ sale, projects, onSave, onClose }) {
     setSaving(true);
     try {
       const prob = parseFloat(form.probability) || 0;
-      const status = prob === 100 ? 'KAZANILDI' : form.status;
-      const data = { ...form, amount: parseFloat(form.amount) || 0, probability: prob, status };
+      const data = { ...form, amount: parseFloat(form.amount) || 0, probability: prob, status: form.status };
       if (isEdit) await potentialSaleApi.update(sale.id, data);
       else await potentialSaleApi.create(data);
       onSave();
@@ -157,8 +158,9 @@ function SaleModal({ sale, projects, onSave, onClose }) {
   );
 }
 
-function ProjectCard({ s, projectName, onEdit, onDelete }) {
+function ProjectCard({ s, projectName, onEdit, onDelete, onConvert }) {
   const [hovered, setHovered] = useState(false);
+  const [converting, setConverting] = useState(false);
   const cfg = STATUS_CFG[s.status] || STATUS_CFG.AKTIF;
   const estimated = (s.amount || 0) * (s.probability || 0) / 100;
 
@@ -222,11 +224,28 @@ function ProjectCard({ s, projectName, onEdit, onDelete }) {
       <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'DM Mono, monospace' }}>
         Hedef: {MONTHS[s.targetMonth - 1]} {s.targetYear}
       </div>
+
+      {/* Projeye Dönüştür — sadece KAZANILDI */}
+      {s.status === 'KAZANILDI' && (
+        <button
+          onClick={async () => { setConverting(true); await onConvert(s); setConverting(false); }}
+          disabled={converting}
+          style={{
+            width: '100%', padding: '8px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+            cursor: 'pointer', border: '1px solid rgba(52,201,122,0.4)',
+            background: 'rgba(52,201,122,0.1)', color: '#34c97a',
+            fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s',
+          }}
+        >
+          {converting ? 'Oluşturuluyor...' : '→ Projeye Dönüştür'}
+        </button>
+      )}
     </div>
   );
 }
 
 export default function SalesPage() {
+  const navigate = useNavigate();
   const [sales, setSales] = useState([]);
   const [projects, setProjects] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -261,6 +280,25 @@ export default function SalesPage() {
     const cat = categoryMap[p.categoryId];
     return !cat || cat.categoryType === 'PROJE';
   });
+
+  const handleConvert = async (sale) => {
+    const now = new Date();
+    try {
+      await projectApi.create({
+        name: sale.name,
+        budget: sale.amount || 0,
+        budgetCurrency: sale.currency || 'TRY',
+        startMonth: now.getMonth() + 1,
+        startYear: now.getFullYear(),
+        endMonth: sale.targetMonth || (now.getMonth() + 1),
+        endYear: sale.targetYear || now.getFullYear(),
+        status: 'active',
+      });
+      navigate('/projects');
+    } catch (e) {
+      alert('Proje oluşturulamadı: ' + (e.response?.data?.error || e.message));
+    }
+  };
 
   const getProjectName = (id) => id ? (projectMap[String(id)]?.name || '') : '';
   const filtered = projeSales.filter(s => statusFilter === 'ALL' || s.status === statusFilter);
@@ -323,6 +361,7 @@ export default function SalesPage() {
               projectName={getProjectName(s.projectId)}
               onEdit={setEditing}
               onDelete={setDeleteConfirm}
+              onConvert={handleConvert}
             />
           ))}
         </div>
