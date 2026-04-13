@@ -48,6 +48,8 @@ public class ProjectService {
             existing.setProjectManagerId(updated.getProjectManagerId());
             existing.setTechLeadId(updated.getTechLeadId());
             existing.setUnitId(updated.getUnitId());
+            if (updated.getProjectStatus() != null) existing.setProjectStatus(updated.getProjectStatus());
+            existing.setProbability(updated.getProbability());
             return projectRepository.save(existing);
         });
     }

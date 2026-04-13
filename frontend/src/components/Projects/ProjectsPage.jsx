@@ -44,6 +44,13 @@ function ArrowIcon() { return <svg width="14" height="14" fill="none" stroke="cu
 
 const MONTHS_SHORT = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
 
+const PROJECT_STATUS_CFG = {
+  POTANSIYEL:   { label: 'Potansiyel',   color: '#f59e0b', bg: 'rgba(245,158,11,0.12)'  },
+  BASLADI:      { label: 'Başladı',      color: '#60a5fa', bg: 'rgba(96,165,250,0.12)'  },
+  DEVAM_EDIYOR: { label: 'Devam Ediyor', color: '#34d399', bg: 'rgba(52,211,153,0.12)'  },
+  TAMAMLANDI:   { label: 'Tamamlandı',   color: '#a78bfa', bg: 'rgba(167,139,250,0.12)' },
+};
+
 function fmtBudget(v) {
   if (v == null) return '—';
   return new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(v) + ' ₺';
@@ -584,11 +591,12 @@ function PlanningTab({ project, allPersonnel, units, seniorities, onReload }) {
 }
 
 // ── Project card with budget analysis coloring ───────────────────────────────
-function ProjectCard({ project, personnel, personnelMap, seniorityMap, categoryMap = {}, stepMap = {}, onClick, onEdit, onDelete }) {
+function ProjectCard({ project, personnel, personnelMap, seniorityMap, categoryMap = {}, stepMap = {}, onClick, onEdit, onDelete, onMoveToPotensiyal }) {
   const mgr = personnel.find(p => String(p.id) === String(project.projectManagerId));
   const analysis = (personnelMap && seniorityMap) ? analyzeBudget(project, personnelMap, seniorityMap) : { status: 'nodata' };
   const isAcik = analysis.status === 'acik';
   const [hovered, setHovered] = useState(false);
+  const [moving, setMoving] = useState(false);
 
   return (
     <div onClick={onClick}
@@ -599,6 +607,7 @@ function ProjectCard({ project, personnel, personnelMap, seniorityMap, categoryM
         border: `${isAcik ? '2px' : '1px'} solid ${hovered ? 'var(--accent)' : isAcik ? '#f87171' : 'var(--border)'}`,
         background: isAcik ? 'rgba(248,113,113,0.08)' : 'var(--bg-card)',
         boxShadow: hovered ? '0 2px 14px rgba(99,102,241,0.12)' : isAcik ? '0 0 0 1px rgba(248,113,113,0.25)' : 'none',
+        display: 'flex', flexDirection: 'column', gap: 0,
       }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
         <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', flex: 1 }}>{project.name}</div>
@@ -615,24 +624,29 @@ function ProjectCard({ project, personnel, personnelMap, seniorityMap, categoryM
         </div>
       </div>
       {/* Category + Status badges */}
-      {(project.categoryId || project.currentStepId) && (
-        <div style={{ display: 'flex', gap: 4, marginBottom: 8, flexWrap: 'wrap' }}>
-          {project.categoryId && categoryMap[project.categoryId] && (
-            <span style={{
-              fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
-              background: `${categoryMap[project.categoryId].color || 'var(--accent)'}22`,
-              color: categoryMap[project.categoryId].color || 'var(--accent)',
-            }}>{categoryMap[project.categoryId].name}</span>
-          )}
-          {project.currentStepId && stepMap[project.currentStepId] && (
-            <span style={{
-              fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
-              background: 'var(--bg-hover)', color: 'var(--text-secondary)',
-              border: '1px solid var(--border)',
-            }}>{stepMap[project.currentStepId].label}</span>
-          )}
-        </div>
-      )}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 8, flexWrap: 'wrap' }}>
+        {PROJECT_STATUS_CFG[project.projectStatus] && (
+          <span style={{
+            fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+            background: PROJECT_STATUS_CFG[project.projectStatus].bg,
+            color: PROJECT_STATUS_CFG[project.projectStatus].color,
+          }}>{PROJECT_STATUS_CFG[project.projectStatus].label}</span>
+        )}
+        {project.categoryId && categoryMap[project.categoryId] && (
+          <span style={{
+            fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+            background: `${categoryMap[project.categoryId].color || 'var(--accent)'}22`,
+            color: categoryMap[project.categoryId].color || 'var(--accent)',
+          }}>{categoryMap[project.categoryId].name}</span>
+        )}
+        {project.currentStepId && stepMap[project.currentStepId] && (
+          <span style={{
+            fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
+            background: 'var(--bg-hover)', color: 'var(--text-secondary)',
+            border: '1px solid var(--border)',
+          }}>{stepMap[project.currentStepId].label}</span>
+        )}
+      </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px' }}>
         <div style={{ fontSize: 11 }}>
           <span style={{ color: 'var(--text-secondary)' }}>Proje Yöneticisi: </span>
@@ -667,11 +681,30 @@ function ProjectCard({ project, personnel, personnelMap, seniorityMap, categoryM
           <span style={{ color: 'var(--text-primary)' }}>{MONTHS_SHORT[project.startMonth-1]} {project.startYear} – {MONTHS_SHORT[project.endMonth-1]} {project.endYear}</span>
         </div>
       </div>
+      {/* Potansiyele Taşı butonu */}
+      {onMoveToPotensiyal && (
+        <div onClick={e => e.stopPropagation()} style={{ marginTop: 10 }}>
+          <button
+            disabled={moving}
+            onClick={async () => { setMoving(true); await onMoveToPotensiyal(project); setMoving(false); }}
+            style={{
+              width: '100%', padding: '6px 0', borderRadius: 6, fontSize: 11, fontWeight: 600,
+              cursor: 'pointer', border: '1px solid var(--border)',
+              background: 'var(--bg-secondary)', color: 'var(--text-muted)',
+              fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#f59e0b'; e.currentTarget.style.color = '#f59e0b'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+          >
+            {moving ? 'Taşınıyor...' : '↩ Potansiyele Taşı'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
-function EmySectionProjects({ name, projects, personnel, personnelMap, seniorityMap, categoryMap, stepMap, onSelectProject, onEdit, onDelete, defaultOpen }) {
+function EmySectionProjects({ name, projects, personnel, personnelMap, seniorityMap, categoryMap, stepMap, onSelectProject, onEdit, onDelete, onMoveToPotensiyal, defaultOpen }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div style={{ marginBottom: 8, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
@@ -689,6 +722,7 @@ function EmySectionProjects({ name, projects, personnel, personnelMap, seniority
               onClick={() => onSelectProject(p)}
               onEdit={onEdit}
               onDelete={onDelete}
+              onMoveToPotensiyal={onMoveToPotensiyal}
             />
           ))}
         </div>
@@ -728,12 +762,15 @@ function ProjectModal({ project, personnel, projectTypes = [], categories = [], 
     projectType: project.projectType || '',
     categoryId: project.categoryId || '',
     currentStepId: project.currentStepId || '',
+    projectStatus: project.projectStatus || 'BASLADI',
+    probability: project.probability ?? 50,
   } : {
     name: '', customerName: '',
     startMonth: new Date().getMonth()+1, startYear: currentYear,
     endMonth: new Date().getMonth()+1, endYear: currentYear+1,
     budget: '', budgetCurrency: 'TRY', projectManagerId: '', techLeadId: '',
     unitId: '', projectType: '', categoryId: '', currentStepId: '',
+    projectStatus: 'BASLADI', probability: 50,
   });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -867,9 +904,33 @@ function ProjectModal({ project, personnel, projectTypes = [], categories = [], 
             />
           </div>
         </div>
+        {/* Yaşam döngüsü statüsü */}
+        <div className="form-group">
+          <label className="form-label">Proje Aşaması</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {Object.entries(PROJECT_STATUS_CFG).map(([key, cfg]) => (
+              <button key={key} type="button" onClick={() => set('projectStatus', key)} style={{
+                padding: '6px 14px', borderRadius: 20, cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                border: `2px solid ${form.projectStatus === key ? cfg.color : 'var(--border)'}`,
+                background: form.projectStatus === key ? cfg.bg : 'var(--bg-secondary)',
+                color: form.projectStatus === key ? cfg.color : 'var(--text-muted)',
+                fontFamily: 'DM Sans, sans-serif',
+              }}>{cfg.label}</button>
+            ))}
+          </div>
+        </div>
+        {/* Olasılık — sadece POTANSIYEL'de */}
+        {form.projectStatus === 'POTANSIYEL' && (
+          <div className="form-group">
+            <label className="form-label">Gerçekleşme Olasılığı: <strong style={{ color: 'var(--accent)' }}>%{form.probability}</strong></label>
+            <input type="range" min={0} max={100} step={5} value={form.probability}
+              onChange={e => set('probability', Number(e.target.value))}
+              style={{ width: '100%' }} />
+          </div>
+        )}
         {workflowSteps.length > 0 && (
           <div className="form-group">
-            <label className="form-label">Proje Statüsü</label>
+            <label className="form-label">İş Akışı Adımı</label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {workflowSteps.map(step => (
                 <button key={step.id} onClick={() => set('currentStepId', step.id)} style={{
@@ -1742,6 +1803,11 @@ export default function ProjectsPage() {
     load();
   };
 
+  const handleMoveToPotensiyal = async (project) => {
+    await projectApi.update(project.id, { ...project, projectStatus: 'POTANSIYEL' });
+    load();
+  };
+
   if (selectedProject) {
     return (
       <>
@@ -1773,7 +1839,10 @@ export default function ProjectsPage() {
     }
   }
   // Enrich projects with dynamically calculated potentialSales
-  const enrichedProjects = projects.map(p => ({ ...p, potentialSales: potentialMap[String(p.id)] || 0 }));
+  // POTANSIYEL statüsündeki projeler sadece Potansiyel Projeler sayfasında görünür
+  const enrichedProjects = projects
+    .filter(p => !p.projectStatus || p.projectStatus !== 'POTANSIYEL')
+    .map(p => ({ ...p, potentialSales: potentialMap[String(p.id)] || 0 }));
 
   const counts = Object.fromEntries(
     projectTypes.map(t => [t.id, enrichedProjects.filter(p => p.projectType === t.id).length])
@@ -1814,6 +1883,7 @@ export default function ProjectsPage() {
           onSelectProject={setSelectedProject}
           onEdit={p => { setEditing(p); setModalOpen(true); }}
           onDelete={p => setDeleteConfirm(p)}
+          onMoveToPotensiyal={handleMoveToPotensiyal}
           defaultOpen={idx <= 1}
         />
       ));
@@ -1827,6 +1897,7 @@ export default function ProjectsPage() {
             onClick={() => setSelectedProject(p)}
             onEdit={proj => { setEditing(proj); setModalOpen(true); }}
             onDelete={proj => setDeleteConfirm(proj)}
+            onMoveToPotensiyal={handleMoveToPotensiyal}
           />
         ))}
       </div>

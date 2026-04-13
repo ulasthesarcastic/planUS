@@ -31,6 +31,11 @@ public class Project {
     private String techLeadId;
     private String unitId;
 
+    @Column(columnDefinition = "varchar(20) default 'BASLADI'")
+    private String projectStatus = "BASLADI"; // POTANSIYEL | BASLADI | DEVAM_EDIYOR | TAMAMLANDI
+
+    private int probability = 50; // potansiyel projeler için olasılık (0-100)
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "project_personnel", joinColumns = @JoinColumn(name = "project_id"))
     @Column(name = "personnel_id")
@@ -94,6 +99,10 @@ public class Project {
     public void setTechLeadId(String techLeadId) { this.techLeadId = techLeadId; }
     public String getUnitId() { return unitId; }
     public void setUnitId(String unitId) { this.unitId = unitId; }
+    public String getProjectStatus() { return projectStatus; }
+    public void setProjectStatus(String projectStatus) { this.projectStatus = projectStatus; }
+    public int getProbability() { return probability; }
+    public void setProbability(int probability) { this.probability = probability; }
     public List<String> getPersonnelIds() { return personnelIds; }
     public void setPersonnelIds(List<String> personnelIds) { this.personnelIds = personnelIds; }
     public List<String> getProductIds() { return productIds; }
