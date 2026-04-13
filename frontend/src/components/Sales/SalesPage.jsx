@@ -17,7 +17,7 @@ const probColor = (p) => p >= 70 ? '#34c97a' : p >= 40 ? '#f5a623' : '#f05c5c';
 const emptySale = () => ({
   name: '', projectId: '', amount: '', currency: 'TRY',
   probability: 50, targetMonth: new Date().getMonth() + 1,
-  targetYear: new Date().getFullYear(), status: 'AKTIF',
+  targetYear: new Date().getFullYear(), status: 'AKTIF', saleType: 'PROJE',
 });
 
 function PlusIcon()   { return <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>; }
@@ -252,14 +252,8 @@ export default function SalesPage() {
   const projectMap = Object.fromEntries(projects.map(p => [String(p.id), p]));
   const categoryMap = Object.fromEntries(categories.map(c => [c.id, c]));
 
-  // Only show sales linked to PROJE category (or no project / no category)
-  const projeSales = sales.filter(s => {
-    if (!s.projectId) return true; // no linked project → show in Projeler
-    const project = projectMap[String(s.projectId)];
-    if (!project || !project.categoryId) return true; // no category → show in Projeler
-    const cat = categoryMap[project.categoryId];
-    return !cat || cat.categoryType === 'PROJE';
-  });
+  // Only show sales with saleType === 'PROJE' (or legacy records without saleType)
+  const projeSales = sales.filter(s => !s.saleType || s.saleType === 'PROJE');
 
   // Projects for modal: only PROJE type (or no category)
   const projeProjects = projects.filter(p => {

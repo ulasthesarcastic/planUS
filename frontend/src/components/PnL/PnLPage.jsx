@@ -74,14 +74,20 @@ function calcProjectPnL(project, personnelMap, seniorityMap, potentialSales) {
           sozlesmeli += item.amount || 0;
       }
     }
+    const sozlesmeliBreakdown = sozlesmeli > 0 ? [{ id: project.id, name: project.name, amount: sozlesmeli }] : [];
 
     // Potansiyel Gelir + kırılım
     let potansiyel = 0;
     const salesBreakdown = [];
     for (const sale of potentialSales) {
-      if (sale.status !== 'AKTIF') continue;
       if (String(sale.projectId) !== String(project.id)) continue;
-      if (sale.targetYear === year && sale.targetMonth === month) {
+      if (sale.targetYear !== year || sale.targetMonth !== month) continue;
+
+      if (sale.saleType === 'SIPARIS' && sale.status === 'KAZANILDI') {
+        // Kazanılan sipariş → sözleşmeli gelire ekle
+        sozlesmeli += sale.amount || 0;
+        sozlesmeliBreakdown.push({ id: sale.id, name: `📦 ${sale.name}`, amount: sale.amount || 0 });
+      } else if (sale.status === 'AKTIF') {
         const est = sale.amount * sale.probability / 100;
         potansiyel += est;
         salesBreakdown.push({ id: sale.id, name: sale.name, amount: est, probability: sale.probability });
@@ -91,7 +97,7 @@ function calcProjectPnL(project, personnelMap, seniorityMap, potentialSales) {
     result[key] = {
       year, month, gider, sozlesmeli, potansiyel,
       salesBreakdown,
-      sozlesmeliBreakdown: sozlesmeli > 0 ? [{ id: project.id, name: project.name, amount: sozlesmeli }] : [],
+      sozlesmeliBreakdown,
       giderBreakdown: gider > 0 ? [{ id: project.id, name: project.name, amount: gider }] : [],
       toplam:           sozlesmeli - gider,
       toplamPotansiyel: sozlesmeli + potansiyel - gider,

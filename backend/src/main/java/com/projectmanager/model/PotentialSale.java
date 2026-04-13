@@ -9,7 +9,6 @@ public class PotentialSale {
     @Id
     private String id;
 
-    @Column(nullable = false)
     private String projectId;
 
     @Column(nullable = false)
@@ -24,7 +23,12 @@ public class PotentialSale {
     @Enumerated(EnumType.STRING)
     private Status status = Status.AKTIF;
 
+    @Enumerated(EnumType.STRING)
+    @Column(columnDefinition = "varchar(20) default 'PROJE'")
+    private SaleType saleType = SaleType.PROJE;
+
     public enum Status { AKTIF, KAZANILDI, KAYBEDILDI }
+    public enum SaleType { PROJE, SIPARIS }
 
     public PotentialSale() { this.id = UUID.randomUUID().toString(); }
 
@@ -52,4 +56,6 @@ public class PotentialSale {
     public void setTargetYear(int targetYear) { this.targetYear = targetYear; }
     public Status getStatus() { return status; }
     public void setStatus(Status status) { this.status = status; }
+    public SaleType getSaleType() { return saleType; }
+    public void setSaleType(SaleType saleType) { this.saleType = saleType; }
 }

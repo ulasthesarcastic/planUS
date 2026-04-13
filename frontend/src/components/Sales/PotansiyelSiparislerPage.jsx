@@ -17,7 +17,7 @@ const probColor = (p) => p >= 70 ? '#34c97a' : p >= 40 ? '#f5a623' : '#f05c5c';
 const emptySale = () => ({
   name: '', projectId: '', amount: '', currency: 'TRY',
   probability: 50, targetMonth: new Date().getMonth() + 1,
-  targetYear: new Date().getFullYear(), status: 'AKTIF',
+  targetYear: new Date().getFullYear(), status: 'AKTIF', saleType: 'SIPARIS',
 });
 
 function PlusIcon()  { return <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>; }
@@ -262,21 +262,8 @@ export default function PotansiyelSiparislerPage() {
   const projectMap = Object.fromEntries(projects.map(p => [String(p.id), p]));
   const categoryMap = Object.fromEntries(categories.map(c => [c.id, c]));
 
-  // Only show sales linked to URUN or HIZMET category projects
-  const siparisler = sales.filter(s => {
-    if (!s.projectId) return false;
-    const project = projectMap[String(s.projectId)];
-    if (!project || !project.categoryId) return false;
-    const cat = categoryMap[project.categoryId];
-    return cat?.categoryType === 'URUN' || cat?.categoryType === 'HIZMET';
-  });
-
-  // Projects available for Siparişler = URUN or HIZMET type
-  const siparisProjects = projects.filter(p => {
-    if (!p.categoryId) return false;
-    const cat = categoryMap[p.categoryId];
-    return cat?.categoryType === 'URUN' || cat?.categoryType === 'HIZMET';
-  });
+  // Only show sales with saleType === 'SIPARIS'
+  const siparisler = sales.filter(s => s.saleType === 'SIPARIS');
 
   const getProjectInfo = (projectId) => {
     if (!projectId) return { name: '', categoryName: '', categoryColor: '' };
