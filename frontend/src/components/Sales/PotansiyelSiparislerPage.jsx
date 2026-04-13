@@ -374,7 +374,7 @@ export default function PotansiyelSiparislerPage() {
       {editing !== null && (
         <SaleModal
           sale={editing?.id ? editing : null}
-          projects={siparisProjects}
+          projects={projects}
           onSave={() => { setEditing(null); load(); }}
           onClose={() => setEditing(null)}
         />
