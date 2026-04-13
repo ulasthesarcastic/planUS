@@ -26,15 +26,13 @@ function getMonths(count = 16) {
 
 function utilColor(pct) {
   if (!pct) return 'var(--text-muted)';
-  if (pct > 100) return '#f87171';
-  if (pct >= 85)  return '#fbbf24';
-  return '#34d399';
+  if (pct > 100) return '#f87171'; // kırmızı: aşım
+  return '#34d399';                // yeşil: normal (1-100%)
 }
 
 function utilBg(pct) {
   if (!pct) return 'transparent';
   if (pct > 100) return 'rgba(248,113,113,0.13)';
-  if (pct >= 85)  return 'rgba(251,191,36,0.11)';
   return 'rgba(52,211,153,0.09)';
 }
 
@@ -165,10 +163,7 @@ export default function ResourcePlanningPage() {
         ))}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12, fontSize: 12, color: 'var(--text-muted)' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ width: 10, height: 10, borderRadius: 2, background: '#34d399', display: 'inline-block' }} /> 1-84%
-          </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ width: 10, height: 10, borderRadius: 2, background: '#fbbf24', display: 'inline-block' }} /> 85-100%
+            <span style={{ width: 10, height: 10, borderRadius: 2, background: '#34d399', display: 'inline-block' }} /> 1-100%
           </span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <span style={{ width: 10, height: 10, borderRadius: 2, background: '#f87171', display: 'inline-block' }} /> &gt;100%
