@@ -447,7 +447,7 @@ export default function ProjectCategoriesPage() {
         <div className="empty-state"><p>Henüz kategori tanımlanmamış.</p></div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {categories.map(cat => (
+          {[...categories].sort((a, b) => a.name.localeCompare(b.name, 'tr')).map(cat => (
             <div key={cat.id} style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               padding: '14px 18px', borderRadius: 10,

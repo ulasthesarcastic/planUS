@@ -227,7 +227,7 @@ export default function SenioritiesPage() {
                 </tr>
               </thead>
               <tbody>
-                {seniorities.map(s => (
+                {[...seniorities].sort((a, b) => a.name.localeCompare(b.name, 'tr')).map(s => (
                   <tr key={s.id}>
                     <td style={{ fontWeight: 500 }}>{s.name}</td>
                     <td>

@@ -79,7 +79,7 @@ export default function ProjectTypesPage() {
         <div className="empty-state"><p>Henüz proje tipi tanımlanmamış.</p></div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {types.map(t => (
+          {[...types].sort((a, b) => a.name.localeCompare(b.name, 'tr')).map(t => (
             <div key={t.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10 }}>
               <span style={{ fontWeight: 500, color: 'var(--text-primary)', fontSize: 14 }}>{t.name}</span>
               <div className="actions-cell">

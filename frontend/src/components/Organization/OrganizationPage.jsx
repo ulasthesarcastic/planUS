@@ -133,7 +133,7 @@ export default function OrganizationPage() {
               <table>
                 <thead><tr><th>Birim</th><th>Seviye</th><th style={{ textAlign: 'right' }}>İşlemler</th></tr></thead>
                 <tbody>
-                  {roots.map(root => {
+                  {[...roots].sort((a, b) => a.name.localeCompare(b.name, 'tr')).map(root => {
                     const children = getChildren(root.id);
                     const isOpen = openUnits[root.id] !== false;
                     return [
@@ -155,7 +155,7 @@ export default function OrganizationPage() {
                           </div>
                         </td>
                       </tr>,
-                      ...(isOpen ? children.map(child => (
+                      ...(isOpen ? [...children].sort((a, b) => a.name.localeCompare(b.name, 'tr')).map(child => (
                         <tr key={child.id}>
                           <td><div style={{ paddingLeft: 36, fontWeight: 500 }}>{child.name}</div></td>
                           <td><span style={BADGE_STYLE('#a78bfa')}>2. Seviye</span></td>
