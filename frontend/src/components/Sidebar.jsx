@@ -57,7 +57,7 @@ export default function Sidebar() {
       <div className="sidebar-logo" style={{ paddingBottom: 16, borderBottom: '1px solid var(--border)', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between', gap: 8 }}>
         <Link to="/projects" style={{ display: 'block', overflow: 'hidden', flex: 1, minWidth: 0 }}>
           {collapsed ? (
-            <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', color: 'var(--text-primary)' }}>
               <Icons.LogoIcon />
             </div>
           ) : (
