@@ -39,6 +39,9 @@ public class ProjectService {
         return projectRepository.findById(id).map(existing -> {
             existing.setName(updated.getName());
             existing.setCustomerName(updated.getCustomerName());
+            existing.setProjectType(updated.getProjectType());
+            existing.setCategoryId(updated.getCategoryId());
+            existing.setCurrentStepId(updated.getCurrentStepId());
             existing.setStartMonth(updated.getStartMonth());
             existing.setStartYear(updated.getStartYear());
             existing.setEndMonth(updated.getEndMonth());

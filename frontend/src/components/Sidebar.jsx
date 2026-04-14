@@ -13,7 +13,21 @@ const Icons = {
   DollarSign: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,
   Settings: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
   Back:     () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>,
-  LogoIcon: () => <svg width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><rect x="7" y="13" width="3" height="3" fill="currentColor" stroke="none"/><rect x="11" y="11" width="3" height="3" fill="currentColor" stroke="none"/><rect x="7" y="9" width="3" height="3" fill="currentColor" stroke="none"/><rect x="15" y="9" width="2" height="2" fill="currentColor" stroke="none" transform="rotate(45 16 10)"/></svg>,
+  LogoIcon: () => (
+    <svg width="30" height="30" viewBox="0 0 30 30" fill="none">
+      <circle cx="15" cy="15" r="13" stroke="currentColor" strokeWidth="1.5"/>
+      {/* 3×2 grid — bottom-left */}
+      <rect x="6"  y="15" width="3" height="3" fill="currentColor"/>
+      <rect x="10" y="15" width="3" height="3" fill="currentColor"/>
+      <rect x="14" y="15" width="3" height="3" fill="currentColor"/>
+      <rect x="6"  y="19" width="3" height="3" fill="currentColor"/>
+      <rect x="10" y="19" width="3" height="3" fill="currentColor"/>
+      <rect x="14" y="19" width="3" height="3" fill="currentColor"/>
+      {/* rotated squares — upper-right */}
+      <rect x="17.5" y="8"  width="2.8" height="2.8" fill="currentColor" transform="rotate(45 18.9 9.4)"/>
+      <rect x="14"   y="6"  width="2.2" height="2.2" fill="currentColor" transform="rotate(45 15.1 7.1)"/>
+    </svg>
+  ),
   Grid:     () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>,
 };
 
@@ -43,7 +57,7 @@ export default function Sidebar() {
       <div className="sidebar-logo" style={{ paddingBottom: 16, borderBottom: '1px solid var(--border)', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between', gap: 8 }}>
         <Link to="/projects" style={{ display: 'block', overflow: 'hidden', flex: 1, minWidth: 0 }}>
           {collapsed ? (
-            <div style={{ display: 'flex', justifyContent: 'center', color: 'var(--text-primary)' }}>
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
               <Icons.LogoIcon />
             </div>
           ) : (
