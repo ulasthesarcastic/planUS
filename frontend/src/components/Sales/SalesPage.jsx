@@ -10,6 +10,24 @@ const fmt = (n) => (n || 0).toLocaleString('tr-TR', { minimumFractionDigits: 0, 
 const probColor = (p) => p >= 70 ? '#34c97a' : p >= 40 ? '#f5a623' : '#f05c5c';
 const currentYear = new Date().getFullYear();
 
+function AmountInput({ value, onChange, placeholder = '0', style = {} }) {
+  const toDisplay = (v) => (v !== '' && v !== null && v !== undefined && !isNaN(Number(v))) ? Number(v).toLocaleString('tr-TR') : '';
+  const [display, setDisplay] = useState(toDisplay(value));
+  useEffect(() => { setDisplay(toDisplay(value)); }, [value]);
+  const handleChange = (e) => {
+    const raw = e.target.value.replace(/\./g, '').replace(/[^0-9]/g, '');
+    if (raw === '') { setDisplay(''); onChange(''); return; }
+    const num = Number(raw);
+    setDisplay(num.toLocaleString('tr-TR'));
+    onChange(num);
+  };
+  return (
+    <input className="form-input" value={display} onChange={handleChange}
+      placeholder={placeholder}
+      style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', ...style }} />
+  );
+}
+
 function PlusIcon()  { return <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>; }
 function EditIcon()  { return <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>; }
 function TrashIcon() { return <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>; }
@@ -85,9 +103,7 @@ function PotentialProjectModal({ project, personnel, onSave, onClose }) {
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">Bütçe</label>
-            <input className="form-input" type="number" value={form.budget}
-              onChange={e => set('budget', e.target.value)}
-              style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace' }} />
+            <AmountInput value={form.budget} onChange={v => set('budget', v)} />
           </div>
           <div className="form-group">
             <label className="form-label">Para Birimi</label>
