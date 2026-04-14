@@ -1,82 +1,99 @@
 import { useState, useEffect } from 'react';
 import { seniorityApi } from '../../services/api';
 
-import Button from '@mui/material/Button';
-import IconButton from '@mui/material/IconButton';
-import Dialog from '@mui/material/Dialog';
-import DialogTitle from '@mui/material/DialogTitle';
-import DialogContent from '@mui/material/DialogContent';
-import DialogActions from '@mui/material/DialogActions';
-import TextField from '@mui/material/TextField';
-import Alert from '@mui/material/Alert';
-import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
-import Checkbox from '@mui/material/Checkbox';
-import FormControlLabel from '@mui/material/FormControlLabel';
-
-import AddIcon from '@mui/icons-material/Add';
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import CloseIcon from '@mui/icons-material/Close';
-
 const MONTHS = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
 const CURRENCIES = ['TL', 'USD', 'EUR', 'GBP', 'CHF'];
 const currentYear = new Date().getFullYear();
 const YEARS = Array.from({ length: 15 }, (_, i) => currentYear - 5 + i);
 
+function XIcon()     { return <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>; }
+function EditIcon()  { return <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>; }
+function TrashIcon() { return <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>; }
+function PlusIcon()  { return <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>; }
+
 const emptyRate = () => ({ startMonth: 1, startYear: currentYear, endMonth: null, endYear: null, amount: '', currency: 'TL', openEnded: true });
+
+const label = (text) => (
+  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 5 }}>{text}</label>
+);
+
+function AmountInput({ value, onChange }) {
+  const toDisplay = (v) => (v !== '' && v !== null && v !== undefined && !isNaN(Number(v))) ? Number(v).toLocaleString('tr-TR') : '';
+  const [display, setDisplay] = useState(toDisplay(value));
+  useEffect(() => { setDisplay(toDisplay(value)); }, [value]);
+  const handleChange = (e) => {
+    const raw = e.target.value.replace(/\./g, '').replace(/[^0-9]/g, '');
+    if (raw === '') { setDisplay(''); onChange(''); return; }
+    const num = Number(raw);
+    setDisplay(num.toLocaleString('tr-TR'));
+    onChange(num);
+  };
+  return (
+    <input className="form-input" value={display} onChange={handleChange}
+      placeholder="0" style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace' }} />
+  );
+}
 
 function RateForm({ rate, onChange, onRemove }) {
   return (
-    <Box sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="caption" color="text.disabled" sx={{ textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>Dönem</Typography>
-        <IconButton size="small" color="error" onClick={onRemove}><DeleteOutlineIcon sx={{ fontSize: 16 }} /></IconButton>
-      </Box>
-      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-        <Box>
-          <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>Başlangıç</Typography>
-          <Box sx={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 1 }}>
-            <TextField select size="small" value={rate.startMonth} onChange={e => onChange({ ...rate, startMonth: +e.target.value })} SelectProps={{ native: true }}>
+    <div style={{ padding: 14, border: '1px solid var(--border)', borderRadius: 10, display: 'flex', flexDirection: 'column', gap: 12, background: 'var(--bg-secondary)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Dönem</span>
+        <button className="btn-icon danger" onClick={onRemove}><TrashIcon /></button>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div>
+          {label('Başlangıç')}
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 6 }}>
+            <select className="form-select" value={rate.startMonth} onChange={e => onChange({ ...rate, startMonth: +e.target.value })}>
               {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-            </TextField>
-            <TextField select size="small" value={rate.startYear} onChange={e => onChange({ ...rate, startYear: +e.target.value })} SelectProps={{ native: true }}>
+            </select>
+            <select className="form-select" value={rate.startYear} onChange={e => onChange({ ...rate, startYear: +e.target.value })}>
               {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-            </TextField>
-          </Box>
-        </Box>
-        <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>Bitiş</Typography>
-            <FormControlLabel
-              control={<Checkbox size="small" checked={rate.openEnded} onChange={e => onChange({ ...rate, openEnded: e.target.checked, endMonth: e.target.checked ? null : (rate.endMonth || rate.startMonth), endYear: e.target.checked ? null : (rate.endYear || rate.startYear) })} />}
-              label={<Typography variant="caption">Açık uçlu</Typography>}
-              sx={{ m: 0 }}
-            />
-          </Box>
+            </select>
+          </div>
+        </div>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Bitiş</span>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 12, color: 'var(--text-secondary)' }}>
+              <input type="checkbox" checked={rate.openEnded}
+                onChange={e => onChange({ ...rate, openEnded: e.target.checked, endMonth: e.target.checked ? null : (rate.endMonth || rate.startMonth), endYear: e.target.checked ? null : (rate.endYear || rate.startYear) })}
+                style={{ accentColor: 'var(--accent)', cursor: 'pointer' }} />
+              Açık uçlu
+            </label>
+          </div>
           {!rate.openEnded ? (
-            <Box sx={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 1 }}>
-              <TextField select size="small" value={rate.endMonth || 1} onChange={e => onChange({ ...rate, endMonth: +e.target.value })} SelectProps={{ native: true }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 6 }}>
+              <select className="form-select" value={rate.endMonth || 1} onChange={e => onChange({ ...rate, endMonth: +e.target.value })}>
                 {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-              </TextField>
-              <TextField select size="small" value={rate.endYear || currentYear} onChange={e => onChange({ ...rate, endYear: +e.target.value })} SelectProps={{ native: true }}>
+              </select>
+              <select className="form-select" value={rate.endYear || currentYear} onChange={e => onChange({ ...rate, endYear: +e.target.value })}>
                 {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-              </TextField>
-            </Box>
+              </select>
+            </div>
           ) : (
-            <Box sx={{ p: 1.25, bgcolor: 'background.default', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
-              <Typography variant="caption" color="text.disabled">Süresiz geçerli</Typography>
-            </Box>
+            <div style={{ padding: '7px 10px', background: 'var(--bg-card)', borderRadius: 7, border: '1px solid var(--border)', fontSize: 12, color: 'var(--text-muted)' }}>
+              Süresiz geçerli
+            </div>
           )}
-        </Box>
-      </Box>
-      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-        <TextField label="Tutar" type="number" size="small" placeholder="0.00" value={rate.amount} onChange={e => onChange({ ...rate, amount: e.target.value })} />
-        <TextField label="Para Birimi" select size="small" value={rate.currency} onChange={e => onChange({ ...rate, currency: e.target.value })} SelectProps={{ native: true }}>
-          {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
-        </TextField>
-      </Box>
-    </Box>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div>
+          {label('Tutar')}
+          <AmountInput value={rate.amount} onChange={v => onChange({ ...rate, amount: v })} />
+        </div>
+        <div>
+          {label('Para Birimi')}
+          <select className="form-select" value={rate.currency} onChange={e => onChange({ ...rate, currency: e.target.value })}>
+            {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -91,7 +108,17 @@ function SeniorityModal({ seniority, onSave, onClose }) {
     if (!name.trim()) return setError('Kıdem adı zorunludur.');
     setError(''); setSaving(true);
     try {
-      const payload = { id: seniority?.id, name: name.trim(), rates: rates.map(r => ({ startYear: r.startYear, startMonth: r.startMonth, endYear: r.openEnded ? null : (r.endYear || r.startYear), endMonth: r.openEnded ? null : (r.endMonth || r.startMonth), amount: parseFloat(r.amount) || 0, currency: r.currency })) };
+      const payload = {
+        id: seniority?.id,
+        name: name.trim(),
+        rates: rates.map(r => ({
+          startYear: r.startYear, startMonth: r.startMonth,
+          endYear: r.openEnded ? null : (r.endYear || r.startYear),
+          endMonth: r.openEnded ? null : (r.endMonth || r.startMonth),
+          amount: parseFloat(r.amount) || 0,
+          currency: r.currency,
+        })),
+      };
       if (isEdit) await seniorityApi.update(seniority.id, payload);
       else await seniorityApi.create(payload);
       onSave();
@@ -101,39 +128,53 @@ function SeniorityModal({ seniority, onSave, onClose }) {
   };
 
   return (
-    <Dialog open onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        {isEdit ? 'Kıdem Düzenle' : 'Yeni Kıdem'}
-        <IconButton size="small" onClick={onClose}><CloseIcon fontSize="small" /></IconButton>
-      </DialogTitle>
-      <DialogContent>
-        {error && <Alert severity="error" sx={{ mb: 2, mt: 1 }}>{error}</Alert>}
-        <TextField label="Kıdem Adı" placeholder="örn. Araştırmacı, Uzman, Kıdemli Mühendis..." value={name} onChange={e => setName(e.target.value)} autoFocus fullWidth sx={{ mt: 1, mb: 2 }} />
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-          <Box>
-            <Typography variant="subtitle2">Maliyet Dönemleri</Typography>
-            <Typography variant="caption" color="text.disabled">Aylık bazda maliyet tanımlayın</Typography>
-          </Box>
-          <Button variant="outlined" size="small" startIcon={<AddIcon />} onClick={() => setRates([...rates, emptyRate()])}>Dönem Ekle</Button>
-        </Box>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal modal-lg">
+        <div className="modal-header">
+          <div className="modal-title">{isEdit ? 'Kıdem Düzenle' : 'Yeni Kıdem'}</div>
+          <button className="btn-icon" onClick={onClose}><XIcon /></button>
+        </div>
+
+        {error && <div style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '10px 14px', color: '#ef4444', fontSize: 13, marginBottom: 16 }}>{error}</div>}
+
+        <div style={{ marginBottom: 16 }}>
+          {label('Kıdem Adı')}
+          <input className="form-input" value={name} onChange={e => setName(e.target.value)}
+            placeholder="örn. Araştırmacı, Uzman, Kıdemli Mühendis..." autoFocus />
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Maliyet Dönemleri</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Aylık bazda maliyet tanımlayın</div>
+          </div>
+          <button className="btn btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}
+            onClick={() => setRates([...rates, emptyRate()])}>
+            <PlusIcon /> Dönem Ekle
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 400, overflowY: 'auto' }}>
           {rates.length === 0 && (
-            <Box sx={{ textAlign: 'center', p: 3, border: '1px dashed', borderColor: 'divider', borderRadius: 2, color: 'text.disabled' }}>
-              <Typography variant="body2">Henüz maliyet dönemi eklenmedi</Typography>
-            </Box>
+            <div style={{ textAlign: 'center', padding: '20px', border: '1px dashed var(--border)', borderRadius: 10, color: 'var(--text-muted)', fontSize: 13 }}>
+              Henüz maliyet dönemi eklenmedi
+            </div>
           )}
           {rates.map((rate, idx) => (
             <RateForm key={idx} rate={rate}
               onChange={updated => setRates(rates.map((r, i) => i === idx ? updated : r))}
               onRemove={() => setRates(rates.filter((_, i) => i !== idx))} />
           ))}
-        </Box>
-      </DialogContent>
-      <DialogActions>
-        <Button variant="outlined" onClick={onClose}>İptal</Button>
-        <Button variant="contained" onClick={handleSave} disabled={saving}>{saving ? 'Kaydediliyor...' : isEdit ? 'Güncelle' : 'Oluştur'}</Button>
-      </DialogActions>
-    </Dialog>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 }}>
+          <button className="btn btn-ghost" onClick={onClose}>İptal</button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+            {saving ? 'Kaydediliyor...' : isEdit ? 'Güncelle' : 'Oluştur'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -169,7 +210,7 @@ export default function SenioritiesPage() {
           <div className="page-title">Kıdem Yönetimi</div>
           <div className="page-subtitle">Kıdem seviyeleri ve dönemsel maliyetleri yönetin</div>
         </div>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setEditing(null); setModalOpen(true); }}>Yeni Kıdem</Button>
+        <button className="btn btn-primary" onClick={() => { setEditing(null); setModalOpen(true); }}>+ Yeni Kıdem</button>
       </div>
 
       <div className="card">
@@ -178,13 +219,20 @@ export default function SenioritiesPage() {
           : (
           <div className="table-wrapper">
             <table>
-              <thead><tr><th>Kıdem Adı</th><th>Maliyet Dönemleri</th><th style={{ textAlign: 'right' }}>İşlemler</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Kıdem Adı</th>
+                  <th>Maliyet Dönemleri</th>
+                  <th style={{ textAlign: 'right' }}>İşlemler</th>
+                </tr>
+              </thead>
               <tbody>
                 {seniorities.map(s => (
                   <tr key={s.id}>
                     <td style={{ fontWeight: 500 }}>{s.name}</td>
                     <td>
-                      {!s.rates?.length ? <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Tanımlanmamış</span>
+                      {!s.rates?.length
+                        ? <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Tanımlanmamış</span>
                         : s.rates.map((r, i) => (
                           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: i < s.rates.length - 1 ? 4 : 0 }}>
                             <span className="rate-period">{formatPeriod(r)}</span>
@@ -195,8 +243,8 @@ export default function SenioritiesPage() {
                     </td>
                     <td>
                       <div className="actions-cell">
-                        <IconButton size="small" onClick={() => { setEditing(s); setModalOpen(true); }}><EditOutlinedIcon sx={{ fontSize: 16 }} /></IconButton>
-                        <IconButton size="small" color="error" onClick={() => { setDeleteConfirm(s); setDeleteError(''); }}><DeleteOutlineIcon sx={{ fontSize: 16 }} /></IconButton>
+                        <button className="btn-icon" onClick={() => { setEditing(s); setModalOpen(true); }}><EditIcon /></button>
+                        <button className="btn-icon danger" onClick={() => { setDeleteConfirm(s); setDeleteError(''); }}><TrashIcon /></button>
                       </div>
                     </td>
                   </tr>
@@ -207,19 +255,30 @@ export default function SenioritiesPage() {
         )}
       </div>
 
-      {modalOpen && <SeniorityModal seniority={editing} onSave={() => { setModalOpen(false); load(); }} onClose={() => setModalOpen(false)} />}
+      {modalOpen && (
+        <SeniorityModal seniority={editing}
+          onSave={() => { setModalOpen(false); load(); }}
+          onClose={() => setModalOpen(false)} />
+      )}
 
-      <Dialog open={!!deleteConfirm} onClose={() => setDeleteConfirm(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>Kıdemi Sil</DialogTitle>
-        <DialogContent>
-          {deleteError && <Alert severity="error" sx={{ mb: 1.5 }}>{deleteError}</Alert>}
-          <Typography variant="body2" color="text.secondary"><strong>{deleteConfirm?.name}</strong> kıdemini silmek istediğinizden emin misiniz?</Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button variant="outlined" onClick={() => setDeleteConfirm(null)}>İptal</Button>
-          <Button variant="contained" color="error" onClick={() => handleDelete(deleteConfirm.id)}>Sil</Button>
-        </DialogActions>
-      </Dialog>
+      {deleteConfirm && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setDeleteConfirm(null)}>
+          <div className="modal" style={{ maxWidth: 400 }}>
+            <div className="modal-header">
+              <div className="modal-title">Kıdemi Sil</div>
+              <button className="btn-icon" onClick={() => setDeleteConfirm(null)}><XIcon /></button>
+            </div>
+            {deleteError && <div style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '10px 14px', color: '#ef4444', fontSize: 13, marginBottom: 16 }}>{deleteError}</div>}
+            <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 20 }}>
+              <strong style={{ color: 'var(--text-primary)' }}>{deleteConfirm?.name}</strong> kıdemini silmek istediğinizden emin misiniz?
+            </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-ghost" onClick={() => setDeleteConfirm(null)}>İptal</button>
+              <button className="btn" style={{ background: 'var(--danger)', color: '#fff' }} onClick={() => handleDelete(deleteConfirm.id)}>Sil</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
