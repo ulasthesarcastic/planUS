@@ -2,6 +2,7 @@ import { NavLink, useLocation, useNavigate, Link } from 'react-router-dom';
 import { useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import logo from '../assets/logo.png';
+import logoIcon from '../assets/logo-icon.png';
 
 const Icons = {
   Users:    () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
@@ -57,8 +58,8 @@ export default function Sidebar() {
       <div className="sidebar-logo" style={{ paddingBottom: 16, borderBottom: '1px solid var(--border)', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between', gap: 8 }}>
         <Link to="/projects" style={{ display: 'block', overflow: 'hidden', flex: 1, minWidth: 0 }}>
           {collapsed ? (
-            <div style={{ display: 'flex', justifyContent: 'center', color: 'var(--text-primary)' }}>
-              <Icons.LogoIcon />
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <img src={logoIcon} alt="planUS" style={{ width: 32, height: 32, filter: 'brightness(0) invert(1)' }} />
             </div>
           ) : (
             <img src={logo} alt="planUS" style={{ width: '100%', maxWidth: 180, height: 'auto', display: 'block' }} />
