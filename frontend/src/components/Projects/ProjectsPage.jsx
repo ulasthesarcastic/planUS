@@ -1804,6 +1804,11 @@ export default function ProjectsPage() {
   };
 
   const handleMoveToPotensiyal = async (project) => {
+    // Önce bu projeye bağlı PROJE tipi satışları sil (çift sayım önleme)
+    const linked = potentialSalesAll.filter(
+      s => s.projectId && String(s.projectId) === String(project.id) && (!s.saleType || s.saleType === 'PROJE')
+    );
+    await Promise.all(linked.map(s => potentialSaleApi.delete(s.id)));
     await projectApi.update(project.id, { ...project, projectStatus: 'POTANSIYEL' });
     load();
   };
