@@ -1614,9 +1614,7 @@ function BudgetTab({ project, onUpdate }) {
         {/* Kalan Bütçe */}
         <div className="form-group">
           <label className="form-label">Kalan Bütçe ({currency})</label>
-          <input className="form-input" type="number" value={remainingBudget}
-            onChange={e => setRemainingBudget(e.target.value)}
-            placeholder="0" style={{ fontFamily: 'DM Mono, monospace' }} />
+          <AmountInput value={remainingBudget} onChange={setRemainingBudget} />
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
             Kullanılan: {fmt(totalBudget - (parseFloat(remainingBudget) || 0))} {currency}
           </div>
