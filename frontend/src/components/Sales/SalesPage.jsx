@@ -11,6 +11,14 @@ const fmt = (n) => (n || 0).toLocaleString('tr-TR', { minimumFractionDigits: 0, 
 const probColor = (p) => p >= 70 ? '#34c97a' : p >= 40 ? '#f5a623' : '#f05c5c';
 const currentYear = new Date().getFullYear();
 
+// Başlama tarihi + süre → bitiş tarihi
+const computeEnd = (startMonth, startYear, duration) => {
+  const total = (startMonth - 1) + (Number(duration) - 1);
+  return { endMonth: (total % 12) + 1, endYear: startYear + Math.floor(total / 12) };
+};
+// Başlama + bitiş → süre (ay)
+const computeDuration = (sm, sy, em, ey) => (ey - sy) * 12 + (em - sm) + 1;
+
 function AmountInput({ value, onChange, placeholder = '0', style = {} }) {
   const toDisplay = (v) => (v !== '' && v !== null && v !== undefined && !isNaN(Number(v))) ? Number(v).toLocaleString('tr-TR') : '';
   const [display, setDisplay] = useState(toDisplay(value));
@@ -37,43 +45,54 @@ function XIcon()     { return <svg width="16" height="16" fill="none" stroke="cu
 // ── Modal: Potansiyel Proje Oluştur / Düzenle ────────────────────────────────
 function PotentialProjectModal({ project, personnel, onSave, onClose }) {
   const isEdit = !!project?.id;
+
+  const initDuration = project?.id && project.startMonth && project.endMonth
+    ? computeDuration(project.startMonth, project.startYear, project.endMonth, project.endYear)
+    : 3;
+
   const [form, setForm] = useState(project?.id ? {
     name: project.name,
     budget: project.budget || '',
     budgetCurrency: project.budgetCurrency || 'TRY',
     probability: project.probability ?? 50,
-    endMonth: project.endMonth || (new Date().getMonth() + 1),
-    endYear: project.endYear || currentYear,
+    startMonth: project.startMonth || (new Date().getMonth() + 1),
+    startYear: project.startYear || currentYear,
+    durationMonths: initDuration,
     projectManagerId: project.projectManagerId || '',
   } : {
     name: '',
     budget: '',
     budgetCurrency: 'TRY',
     probability: 50,
-    endMonth: new Date().getMonth() + 1,
-    endYear: currentYear,
+    startMonth: new Date().getMonth() + 1,
+    startYear: currentYear,
+    durationMonths: 3,
     projectManagerId: '',
   });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
+  const dur = Number(form.durationMonths);
+  const calcEnd = dur >= 1 ? computeEnd(form.startMonth, form.startYear, dur) : null;
+
   const handleSave = async () => {
     if (!form.name.trim()) return setError('Proje adı zorunludur.');
-    setSaving(true);
+    if (!dur || dur < 1) return setError('Proje süresi girilmelidir.');
+    setError(''); setSaving(true);
     try {
+      const { endMonth, endYear } = computeEnd(form.startMonth, form.startYear, dur);
       const payload = {
         name: form.name,
         budget: parseFloat(form.budget) || 0,
         budgetCurrency: form.budgetCurrency,
         probability: form.probability,
-        endMonth: form.endMonth,
-        endYear: form.endYear,
+        startMonth: form.startMonth,
+        startYear: form.startYear,
+        endMonth,
+        endYear,
         projectManagerId: form.projectManagerId || null,
         projectStatus: 'POTANSIYEL',
-        // Başlangıç tarihi olarak bugünü kullan
-        startMonth: project?.startMonth || (new Date().getMonth() + 1),
-        startYear: project?.startYear || currentYear,
       };
       if (isEdit) {
         await projectApi.update(project.id, { ...project, ...payload });
@@ -126,16 +145,37 @@ function PotentialProjectModal({ project, personnel, onSave, onClose }) {
           </div>
         </div>
 
-        <div className="form-group">
-          <label className="form-label">Hedef Tarih</label>
-          <div className="month-year-row">
-            <select className="form-select" value={form.endMonth} onChange={e => set('endMonth', +e.target.value)}>
-              {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-            </select>
-            <select className="form-select" value={form.endYear} onChange={e => set('endYear', +e.target.value)}>
-              {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-            </select>
+        {/* Tarih & Süre */}
+        <div className="form-row">
+          <div className="form-group" style={{ flex: 2 }}>
+            <label className="form-label">Tahmini Başlama Tarihi <span style={{ color: 'var(--danger)' }}>*</span></label>
+            <div className="month-year-row">
+              <select className="form-select" value={form.startMonth} onChange={e => set('startMonth', +e.target.value)}>
+                {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+              </select>
+              <select className="form-select" value={form.startYear} onChange={e => set('startYear', +e.target.value)}>
+                {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
           </div>
+          <div className="form-group" style={{ flex: 1 }}>
+            <label className="form-label">Süre (Ay) <span style={{ color: 'var(--danger)' }}>*</span></label>
+            <input
+              className="form-input"
+              type="number" min={1} max={120}
+              value={form.durationMonths}
+              onChange={e => set('durationMonths', e.target.value === '' ? '' : +e.target.value)}
+              style={{ textAlign: 'center' }}
+            />
+          </div>
+        </div>
+
+        {/* Otomatik hesaplanan bitiş tarihi */}
+        <div style={{ padding: '10px 14px', background: 'var(--bg-secondary)', borderRadius: 8, border: '1px solid var(--border)', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Tahmini Tamamlanma Tarihi</span>
+          <span style={{ fontSize: 14, fontWeight: 700, fontFamily: 'DM Mono, monospace', color: calcEnd ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+            {calcEnd ? `${MONTHS[calcEnd.endMonth - 1]} ${calcEnd.endYear}` : '—'}
+          </span>
         </div>
 
         <div className="form-group">
@@ -236,10 +276,17 @@ function ProjectCard({ item, personnelMap, onEdit, onDelete, onConvert, onDetail
         ))}
       </div>
 
-      {/* Target date */}
-      <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'DM Mono, monospace' }}>
-        Hedef: {MONTHS[item.endMonth - 1]} {item.endYear}
-      </div>
+      {/* Tarih bilgisi */}
+      {item.startMonth && item.endMonth && (
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'DM Mono, monospace', display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span>{MONTHS[item.startMonth - 1]} {item.startYear}</span>
+          <span style={{ opacity: 0.4 }}>→</span>
+          <span>{MONTHS[item.endMonth - 1]} {item.endYear}</span>
+          <span style={{ marginLeft: 4, padding: '1px 7px', borderRadius: 10, fontSize: 11, background: 'var(--bg-hover)', color: 'var(--text-secondary)' }}>
+            {computeDuration(item.startMonth, item.startYear, item.endMonth, item.endYear)} ay
+          </span>
+        </div>
+      )}
 
       {/* Projeye Dönüştür */}
       <button
