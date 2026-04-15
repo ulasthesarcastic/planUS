@@ -139,7 +139,7 @@ export default function PersonnelPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
-  const [sortCol, setSortCol] = useState(null);
+  const [sortCol, setSortCol] = useState('name');
   const [sortDir, setSortDir] = useState('asc');
   const [filterRoot, setFilterRoot] = useState('ALL');
   const [filterChild, setFilterChild] = useState('ALL');
