@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { potentialSaleApi, projectApi, personnelApi } from '../../services/api';
+import { projectApi, personnelApi, productApi, organizationApi, seniorityApi } from '../../services/api';
 import SearchableSelect from '../SearchableSelect';
+import { ProjectDetail } from '../Projects/ProjectsPage';
 
 const MONTHS = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
 const YEARS = [2024, 2025, 2026, 2027, 2028, 2029];
@@ -260,20 +261,30 @@ function ProjectCard({ item, personnelMap, onEdit, onDelete, onConvert, onDetail
 // ── Ana Sayfa ─────────────────────────────────────────────────────────────────
 export default function SalesPage() {
   const navigate = useNavigate();
-  const [potProjects, setPotProjects] = useState([]); // projects with projectStatus=POTANSIYEL
+  const [potProjects, setPotProjects] = useState([]);
   const [personnel, setPersonnel] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [units, setUnits] = useState([]);
+  const [seniorities, setSeniorities] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedProject, setSelectedProject] = useState(null);
   const [editing, setEditing] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   const load = async () => {
-    const [pRes, perRes] = await Promise.all([
-      projectApi.getAll(),
-      personnelApi.getAll(),
+    const [pRes, perRes, prRes, uRes, sRes] = await Promise.all([
+      projectApi.getAll(), personnelApi.getAll(), productApi.getAll(),
+      organizationApi.getAll(), seniorityApi.getAll(),
     ]);
-    setPotProjects(pRes.data.filter(p => p.projectStatus === 'POTANSIYEL'));
+    const allProjects = pRes.data;
+    setPotProjects(allProjects.filter(p => p.projectStatus === 'POTANSIYEL'));
     setPersonnel(perRes.data);
+    setProducts(prRes.data);
+    setUnits(uRes.data);
+    setSeniorities(sRes.data);
     setLoading(false);
+    // Detay açıksa tazele
+    setSelectedProject(prev => prev ? (allProjects.find(p => p.id === prev.id) || null) : null);
   };
 
   useEffect(() => { load(); }, []);
@@ -281,7 +292,6 @@ export default function SalesPage() {
   const personnelMap = Object.fromEntries(personnel.map(p => [String(p.id), p]));
 
   const handleConvert = async (project) => {
-    // Projeyi POTANSIYEL → BASLADI statüsüne geçir
     await projectApi.update(project.id, { ...project, projectStatus: 'BASLADI' });
     navigate('/projects');
   };
@@ -300,6 +310,32 @@ export default function SalesPage() {
   ];
 
   if (loading) return <div className="loading">Yükleniyor...</div>;
+
+  // Proje detayı açıksa inline göster
+  if (selectedProject) {
+    return (
+      <>
+        <ProjectDetail
+          project={selectedProject}
+          allPersonnel={personnel}
+          allProducts={products}
+          units={units}
+          seniorities={seniorities}
+          onBack={() => setSelectedProject(null)}
+          onEdit={(p) => setEditing(p)}
+          onUpdate={load}
+        />
+        {editing && (
+          <PotentialProjectModal
+            project={editing?.id ? editing : null}
+            personnel={personnel}
+            onSave={() => { setEditing(null); load(); }}
+            onClose={() => setEditing(null)}
+          />
+        )}
+      </>
+    );
+  }
 
   return (
     <div>
@@ -336,7 +372,7 @@ export default function SalesPage() {
               onEdit={setEditing}
               onDelete={setDeleteConfirm}
               onConvert={handleConvert}
-              onDetail={() => navigate('/projects', { state: { openProjectId: item.id } })}
+              onDetail={() => setSelectedProject(item)}
             />
           ))}
         </div>

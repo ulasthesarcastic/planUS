@@ -1663,7 +1663,7 @@ function BudgetTab({ project, onUpdate }) {
 }
 
 // ── PROJE DETAY EKRANI ───────────────────────────────────────────
-function ProjectDetail({ project, allPersonnel, allProducts, units, seniorities, onBack, onEdit, onUpdate }) {
+export function ProjectDetail({ project, allPersonnel, allProducts, units, seniorities, onBack, onEdit, onUpdate }) {
   const [activeTab, setActiveTab] = useState('planning');
   const tabs = [
     { id:'planning', label:'Planlama' },
