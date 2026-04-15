@@ -40,6 +40,83 @@ function utilBg(pct) {
   return 'rgba(248,113,113,0.13)';
 }
 
+// ── Potansiyel proje seçici modal ────────────────────────────────────────────
+function PotentialSelectorModal({ potProjects, selectedIds, onApply, onClose }) {
+  const [localSel, setLocalSel] = useState(new Set(selectedIds));
+
+  const toggle = (id) => setLocalSel(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 480 }}>
+        <div className="modal-header">
+          <div className="modal-title">Potansiyel Proje Seç</div>
+          <button className="btn-icon" onClick={onClose}>
+            <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+          Seçilen projeler kaynak dağılımına dahil edilir.
+        </div>
+
+        {/* Tümünü seç / kaldır */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <button className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 12px' }}
+            onClick={() => setLocalSel(new Set(potProjects.map(p => p.id)))}>
+            Tümünü Seç
+          </button>
+          <button className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 12px' }}
+            onClick={() => setLocalSel(new Set())}>
+            Hiçbirini Seçme
+          </button>
+        </div>
+
+        {potProjects.length === 0 ? (
+          <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '16px 0', textAlign: 'center' }}>
+            Potansiyel proje yok.
+          </div>
+        ) : (
+          <div style={{ maxHeight: 340, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {[...potProjects].sort((a, b) => a.name.localeCompare(b.name, 'tr')).map(p => (
+              <label key={p.id} style={{
+                display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
+                borderRadius: 8, cursor: 'pointer',
+                background: localSel.has(p.id) ? 'rgba(245,158,11,0.1)' : 'var(--bg-secondary)',
+                border: `1px solid ${localSel.has(p.id) ? 'rgba(245,158,11,0.4)' : 'var(--border)'}`,
+                transition: 'all 0.12s',
+              }}>
+                <input type="checkbox" checked={localSel.has(p.id)} onChange={() => toggle(p.id)}
+                  style={{ accentColor: '#f59e0b', width: 15, height: 15, flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {p.name}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    %{p.probability ?? 50} olasılık
+                    {p.startMonth && p.endMonth && ` · ${p.startMonth}/${p.startYear} – ${p.endMonth}/${p.endYear}`}
+                  </div>
+                </div>
+              </label>
+            ))}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+          <button className="btn btn-ghost" onClick={onClose}>İptal</button>
+          <button className="btn btn-primary" onClick={() => onApply(localSel)}>
+            {localSel.size > 0 ? `${localSel.size} Proje Dahil Et` : 'Potansiyelsiz Göster'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ResourcePlanningPage() {
   const [units, setUnits]         = useState([]);
   const [personnel, setPersonnel] = useState([]);
@@ -47,6 +124,8 @@ export default function ResourcePlanningPage() {
   const [loading, setLoading]     = useState(true);
   const [selectedFilters, setSelectedFilters] = useState(new Set(FILTER_LABELS));
   const [expandedPersons, setExpandedPersons] = useState(new Set());
+  const [selectedPotIds, setSelectedPotIds]   = useState(new Set());
+  const [potModalOpen, setPotModalOpen]       = useState(false);
   const scrollRef = useRef(null);
 
   const months = useMemo(() => getMonths(15), []);
@@ -67,8 +146,18 @@ export default function ResourcePlanningPage() {
     });
   }, []);
 
-  // Tüm projelerden utilization map oluştur
-  // { "personnelId_year_month": { total: number, projects: [{id, name, pct}] } }
+  // Aktif projeler ve potansiyel projeler
+  const potProjects    = useMemo(() => projects.filter(p => p.projectStatus === 'POTANSIYEL'), [projects]);
+  const activeProjects = useMemo(() => projects.filter(p => p.projectStatus !== 'POTANSIYEL'), [projects]);
+
+  // utilMap'e girecek projeler: aktif + seçili potansiyeller
+  const includedProjects = useMemo(() => [
+    ...activeProjects,
+    ...potProjects.filter(p => selectedPotIds.has(p.id)),
+  ], [activeProjects, potProjects, selectedPotIds]);
+
+  // Utilization map oluştur
+  // { "personnelId_year_month": { total: number, projects: [{id, name, pct, isPot}] } }
   // DB'de iki farklı format var:
   //   Eski import: planned=1.0 → %100 (kesir, 0-1 arası)
   //   Yeni kayıt:  planned=10000 → %100 (toDb: v*100, 0-10000 arası)
@@ -76,7 +165,8 @@ export default function ResourcePlanningPage() {
 
   const utilMap = useMemo(() => {
     const map = {};
-    for (const project of projects) {
+    for (const project of includedProjects) {
+      const isPot = project.projectStatus === 'POTANSIYEL';
       for (const entry of (project.resourcePlan || [])) {
         if (!entry.planned) continue;
         const pct = toPct(entry.planned);
@@ -84,11 +174,11 @@ export default function ResourcePlanningPage() {
         const key = `${entry.personnelId}_${entry.year}_${entry.month}`;
         if (!map[key]) map[key] = { total: 0, projects: [] };
         map[key].total += pct;
-        map[key].projects.push({ id: project.id, name: project.name, pct });
+        map[key].projects.push({ id: project.id, name: project.name, pct, isPot });
       }
     }
     return map;
-  }, [projects]);
+  }, [includedProjects]);
 
   // Bölüm filtreleri
   const rootUnits = units.filter(u => !u.parentId);
@@ -149,7 +239,7 @@ export default function ResourcePlanningPage() {
       </div>
 
       {/* Filtreler */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap', alignItems: 'center' }}>
         {filterGroups.map(({ label, unit }) => (
           <button key={label} onClick={() => toggleFilter(label)}
             style={{
@@ -165,6 +255,21 @@ export default function ResourcePlanningPage() {
             {label}
           </button>
         ))}
+
+        {/* Potansiyel proje seçici */}
+        <button onClick={() => setPotModalOpen(true)} style={{
+          padding: '6px 14px', borderRadius: 20, fontSize: 13, fontWeight: 500,
+          cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s',
+          border: selectedPotIds.size > 0 ? '1px solid #f59e0b' : '1px solid var(--border)',
+          background: selectedPotIds.size > 0 ? 'rgba(245,158,11,0.12)' : 'transparent',
+          color: selectedPotIds.size > 0 ? '#f59e0b' : 'var(--text-secondary)',
+          display: 'flex', alignItems: 'center', gap: 6,
+        }}>
+          {selectedPotIds.size > 0
+            ? `⚡ ${selectedPotIds.size} Potansiyel Dahil`
+            : '+ Potansiyel Ekle'}
+        </button>
+
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12, fontSize: 12, color: 'var(--text-muted)' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <span style={{ width: 10, height: 10, borderRadius: 2, background: '#f87171', display: 'inline-block' }} /> &lt;50%
@@ -295,8 +400,8 @@ export default function ResourcePlanningPage() {
                       for (const pr of entry.projects) allProjectIds.add(pr.id);
                     }
                     const projectRows = [...allProjectIds].map(pid => {
-                      const prj = projects.find(p => p.id === pid);
-                      return { id: pid, name: prj?.name || pid };
+                      const prj = includedProjects.find(p => p.id === pid);
+                      return { id: pid, name: prj?.name || pid, isPot: prj?.projectStatus === 'POTANSIYEL' };
                     }).sort((a, b) => a.name.localeCompare(b.name, 'tr'));
 
                     return (
@@ -356,19 +461,19 @@ export default function ResourcePlanningPage() {
                           <div key={pr.id} style={{
                             display: 'flex', alignItems: 'stretch',
                             borderBottom: '1px solid var(--border)',
-                            background: 'var(--bg-secondary)',
+                            background: pr.isPot ? 'rgba(245,158,11,0.05)' : 'var(--bg-secondary)',
                           }}>
                             <div style={{
                               minWidth: NAME_W, width: NAME_W,
                               padding: '5px 14px 5px 34px',
                               position: 'sticky', left: 0, zIndex: 1,
-                              background: 'var(--bg-secondary)',
+                              background: pr.isPot ? 'rgba(245,158,11,0.07)' : 'var(--bg-secondary)',
                               borderRight: '2px solid var(--border)',
                               whiteSpace: 'nowrap', overflow: 'hidden',
                               textOverflow: 'ellipsis',
-                              fontSize: 11, color: 'var(--text-muted)',
+                              fontSize: 11, color: pr.isPot ? '#f59e0b' : 'var(--text-muted)',
                             }}>
-                              ↳ {pr.name}
+                              ↳ {pr.name}{pr.isPot && <span style={{ marginLeft: 5, fontSize: 9, opacity: 0.8 }}>POT</span>}
                             </div>
                             {months.map(({ year, month }) => {
                               const isCur = year === curYear && month === curMonth;
@@ -398,6 +503,15 @@ export default function ResourcePlanningPage() {
             })}
           </div>
         </div>
+      )}
+
+      {potModalOpen && (
+        <PotentialSelectorModal
+          potProjects={potProjects}
+          selectedIds={selectedPotIds}
+          onApply={(newSel) => { setSelectedPotIds(newSel); setPotModalOpen(false); }}
+          onClose={() => setPotModalOpen(false)}
+        />
       )}
     </div>
   );
