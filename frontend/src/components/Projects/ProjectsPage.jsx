@@ -1746,11 +1746,26 @@ export default function ProjectsPage() {
   const [typeFilter, setTypeFilter] = useState(() => localStorage.getItem(filterKey) || 'ALL');
 
   const location = useLocation();
+  const [pendingOpenId, setPendingOpenId] = useState(null);
 
-  // Sidebar'dan tıklanınca proje seçimini sıfırla
+  // Navigasyon değişince: SalesPage'den geliyorsa projeyi aç, yoksa sıfırla
   useEffect(() => {
-    setSelectedProject(null);
+    if (location.state?.openProjectId) {
+      setPendingOpenId(location.state.openProjectId);
+      setSelectedProject(null);
+    } else {
+      setPendingOpenId(null);
+      setSelectedProject(null);
+    }
   }, [location.key]);
+
+  // Projeler yüklenince bekleyen ID varsa aç
+  useEffect(() => {
+    if (pendingOpenId && projects.length > 0) {
+      const proj = projects.find(p => p.id === pendingOpenId);
+      if (proj) { setSelectedProject(proj); setPendingOpenId(null); }
+    }
+  }, [pendingOpenId, projects]);
 
   const personnelMap = Object.fromEntries(personnel.map(p => [String(p.id), p]));
   const seniorityMap = Object.fromEntries(seniorities.map(s => [String(s.id), s]));

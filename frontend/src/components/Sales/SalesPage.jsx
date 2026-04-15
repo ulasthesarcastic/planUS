@@ -170,7 +170,7 @@ function PotentialProjectModal({ project, personnel, onSave, onClose }) {
 }
 
 // ── Proje Kartı (POTANSIYEL statüsündeki projeler) ────────────────────────────
-function ProjectCard({ item, personnelMap, onEdit, onDelete, onConvert }) {
+function ProjectCard({ item, personnelMap, onEdit, onDelete, onConvert, onDetail }) {
   const [hovered, setHovered] = useState(false);
   const [converting, setConverting] = useState(false);
   const prob = item.probability ?? 50;
@@ -181,6 +181,7 @@ function ProjectCard({ item, personnelMap, onEdit, onDelete, onConvert }) {
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onClick={onDetail}
       style={{
         background: 'var(--bg-card)',
         border: `1px solid ${hovered ? 'var(--accent)' : 'var(--border)'}`,
@@ -188,6 +189,7 @@ function ProjectCard({ item, personnelMap, onEdit, onDelete, onConvert }) {
         display: 'flex', flexDirection: 'column', gap: 10,
         boxShadow: hovered ? '0 2px 14px rgba(99,102,241,0.12)' : 'none',
         transition: 'box-shadow 0.15s, border-color 0.15s',
+        cursor: 'pointer',
       }}
     >
       {/* Header */}
@@ -197,8 +199,8 @@ function ProjectCard({ item, personnelMap, onEdit, onDelete, onConvert }) {
           background: 'rgba(245,158,11,0.12)', color: '#f59e0b',
         }}>Potansiyel</span>
         <div style={{ display: 'flex', gap: 2 }}>
-          <button className="btn-icon" onClick={() => onEdit(item)} style={{ padding: 4 }}><EditIcon /></button>
-          <button className="btn-icon danger" onClick={() => onDelete(item)} style={{ padding: 4 }}><TrashIcon /></button>
+          <button className="btn-icon" onClick={e => { e.stopPropagation(); onEdit(item); }} style={{ padding: 4 }}><EditIcon /></button>
+          <button className="btn-icon danger" onClick={e => { e.stopPropagation(); onDelete(item); }} style={{ padding: 4 }}><TrashIcon /></button>
         </div>
       </div>
 
@@ -240,7 +242,7 @@ function ProjectCard({ item, personnelMap, onEdit, onDelete, onConvert }) {
 
       {/* Projeye Dönüştür */}
       <button
-        onClick={async () => { setConverting(true); await onConvert(item); setConverting(false); }}
+        onClick={async (e) => { e.stopPropagation(); setConverting(true); await onConvert(item); setConverting(false); }}
         disabled={converting}
         style={{
           width: '100%', padding: '8px', borderRadius: 8, fontSize: 12, fontWeight: 600,
@@ -334,6 +336,7 @@ export default function SalesPage() {
               onEdit={setEditing}
               onDelete={setDeleteConfirm}
               onConvert={handleConvert}
+              onDetail={() => navigate('/projects', { state: { openProjectId: item.id } })}
             />
           ))}
         </div>
