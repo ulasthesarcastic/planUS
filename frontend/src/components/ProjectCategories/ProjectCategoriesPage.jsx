@@ -402,7 +402,7 @@ export default function ProjectCategoriesPage() {
     try {
       const payload = { name: form.name.trim(), color: form.color, icon: form.icon, sectionLabel: form.sectionLabel.trim() || null, menuLabel: form.menuLabel.trim() || null };
       if (editingCat === 'new') await projectCategoryApi.create(payload);
-      else await projectCategoryApi.update(editingCat.id, payload);
+      else await projectCategoryApi.update(editingCat.id, { ...payload, stepOrder: editingCat.stepOrder });
       closeForm(); load();
     } catch (e) { setError(e.response?.data?.error || 'Bir hata oluştu.'); }
     finally { setSaving(false); }
