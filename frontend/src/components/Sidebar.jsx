@@ -48,7 +48,7 @@ export default function Sidebar() {
     projectCategoryApi.getAll()
       .then(res => setCategories(res.data || []))
       .catch(() => {});
-  }, []);
+  }, [location.pathname]);
 
   const inSettings = SETTINGS_ROUTES.includes(location.pathname);
 
