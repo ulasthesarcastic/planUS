@@ -175,7 +175,8 @@ function ProjectCard({ item, personnelMap, onEdit, onDelete, onConvert, onDetail
   const [hovered, setHovered] = useState(false);
   const [converting, setConverting] = useState(false);
   const prob = item.probability ?? 50;
-  const estimated = (item.budget || 0) * prob / 100;
+  const paymentTotal = (item.paymentPlan || []).reduce((s, i) => s + (i.amount || 0), 0);
+  const estimated = paymentTotal * prob / 100;
   const mgr = item.projectManagerId ? personnelMap[String(item.projectManagerId)] : null;
 
   return (
@@ -225,7 +226,7 @@ function ProjectCard({ item, personnelMap, onEdit, onDelete, onConvert, onDetail
       {/* Amount boxes */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
         {[
-          { label: 'Bütçe', value: fmt(item.budget), color: 'var(--text-primary)', currency: item.budgetCurrency || 'TRY' },
+          { label: 'Ödeme Planı', value: fmt(paymentTotal), color: 'var(--text-primary)', currency: item.budgetCurrency || 'TRY' },
           { label: 'Tahminlenen', value: fmt(estimated), color: '#34c97a', currency: item.budgetCurrency || 'TRY' },
         ].map(box => (
           <div key={box.label} style={{ padding: '8px 10px', background: 'var(--bg-secondary)', borderRadius: 8, border: '1px solid var(--border)' }}>
@@ -302,7 +303,10 @@ export default function SalesPage() {
     load();
   };
 
-  const totalEstimated = potProjects.reduce((sum, p) => sum + (p.budget || 0) * (p.probability ?? 50) / 100, 0);
+  const totalEstimated = potProjects.reduce((sum, p) => {
+    const pt = (p.paymentPlan || []).reduce((s, i) => s + (i.amount || 0), 0);
+    return sum + pt * (p.probability ?? 50) / 100;
+  }, 0);
 
   const summaryCards = [
     { label: 'Toplam',     value: potProjects.length,    color: 'var(--accent)',   mono: false },
