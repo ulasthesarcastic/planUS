@@ -45,6 +45,7 @@ function emptyMonthData(year, month) {
   return {
     year, month,
     gider: 0, sozlesmeli: 0, potPrije: 0, potSiparis: 0, planSiparis: 0,
+    urunGeliri: 0, gerceklesenGider: 0, potUrunGeliri: 0,
     giderBreakdown: [], sozlesmeliBreakdown: [],
     potPrijeBreakdown: [], potSiparisBreakdown: [], planSiparisBreakdown: [],
     toplam: 0, toplamPotansiyel: 0,
@@ -192,7 +193,7 @@ function aggPnL(activeProjects, potProjects, personnelMap, seniorityMap, allSipa
         if (!agg[key]) agg[key] = emptyMonthData(item.plannedYear, item.plannedMonth);
         const est = (item.amount || 0) * prob;
         agg[key].potPrije += est;
-        agg[key].potPrijeBreakdown.push({ id: p.id, name: `${p.name} – ${item.name || 'Ödeme'}`, amount: est });
+        agg[key].potPrijeBreakdown.push({ id: p.id, name: p.name, amount: est });
         recalcTotals(agg[key]);
       }
     } else {
@@ -215,13 +216,16 @@ function aggPnL(activeProjects, potProjects, personnelMap, seniorityMap, allSipa
 // ── Grid ──────────────────────────────────────────────────────────────────────
 
 const ROWS = [
-  { key: 'gider',            label: 'Planlanan Gider',             bold: false, color: '#ef4444',    expandable: 'gid'  },
-  { key: 'sozlesmeli',       label: 'Sözleşmeli Gelir',            bold: false, color: '#22c55e',    expandable: 'soz'  },
-  { key: 'potPrije',         label: 'Potansiyel Proje Geliri',     bold: false, color: '#f59e0b',    expandable: 'ppj'  },
-  { key: 'potSiparis',       label: 'Potansiyel Sipariş Geliri',   bold: false, color: '#60a5fa',    expandable: 'psp'  },
-  { key: 'planSiparis',      label: 'Planlanan Sipariş Geliri',    bold: false, color: '#34d399',    expandable: 'plsp' },
-  { key: 'toplam',           label: 'Toplam',                      bold: true,  color: 'dynamic',    expandable: false  },
-  { key: 'toplamPotansiyel', label: 'Toplam Potansiyel',           bold: true,  color: 'dynamic',    expandable: false  },
+  { key: 'sozlesmeli',       label: 'Proje Geliri',               bold: false, color: '#22c55e',          expandable: 'soz'  },
+  { key: 'planSiparis',      label: 'Sipariş Geliri',             bold: false, color: '#34d399',          expandable: 'plsp' }, // TODO: hesaplama değişecek
+  { key: 'urunGeliri',       label: 'Ürün Geliri',                bold: false, color: 'var(--text-muted)', expandable: false  }, // TODO: eklenecek
+  { key: 'gerceklesenGider', label: 'Gerçekleşen Gider',         bold: false, color: 'var(--text-muted)', expandable: false  }, // TODO: eklenecek
+  { key: 'gider',            label: 'Planlanan Gider',            bold: false, color: '#ef4444',          expandable: 'gid'  },
+  { key: 'potPrije',         label: 'Potansiyel Proje Geliri',    bold: false, color: '#f59e0b',          expandable: 'ppj'  },
+  { key: 'potUrunGeliri',    label: 'Potansiyel Ürün Geliri',     bold: false, color: 'var(--text-muted)', expandable: false  }, // TODO: eklenecek
+  { key: 'potSiparis',       label: 'Potansiyel Sipariş Geliri',  bold: false, color: '#60a5fa',          expandable: 'psp'  }, // TODO: hesaplama değişecek
+  { key: 'toplam',           label: 'Toplam',                     bold: true,  color: 'dynamic',          expandable: false  },
+  { key: 'toplamPotansiyel', label: 'Toplam Potansiyel',          bold: true,  color: 'dynamic',          expandable: false  },
 ];
 
 function MonthlyGrid({ monthlyData }) {
