@@ -180,16 +180,32 @@ function aggPnL(activeProjects, potProjects, personnelMap, seniorityMap, allSipa
     recalcTotals(agg[key]);
   }
 
-  // Potansiyel projeler: potPrije (endMonth/endYear'a atanır)
+  // Potansiyel projeler: ödeme kalemlerine göre aylara dağıtılır
+  // Ödeme kalemi yoksa fallback: budget × olasılık → endMonth
   for (const p of potProjects) {
-    if (!p.endYear || !p.endMonth) continue;
-    const key = `${p.endYear}_${p.endMonth}`;
-    if (!agg[key]) agg[key] = emptyMonthData(p.endYear, p.endMonth);
-    const est = (p.budget || 0) * (p.probability ?? 50) / 100;
-    if (est > 0) {
-      agg[key].potPrije += est;
-      agg[key].potPrijeBreakdown.push({ id: p.id, name: p.name, amount: est });
-      recalcTotals(agg[key]);
+    const prob = (p.probability ?? 50) / 100;
+    const paymentPlan = (p.paymentPlan || []).filter(i => i.plannedYear && i.plannedMonth && (i.amount || 0) > 0);
+
+    if (paymentPlan.length > 0) {
+      for (const item of paymentPlan) {
+        const key = `${item.plannedYear}_${item.plannedMonth}`;
+        if (!agg[key]) agg[key] = emptyMonthData(item.plannedYear, item.plannedMonth);
+        const est = (item.amount || 0) * prob;
+        agg[key].potPrije += est;
+        agg[key].potPrijeBreakdown.push({ id: p.id, name: `${p.name} – ${item.name || 'Ödeme'}`, amount: est });
+        recalcTotals(agg[key]);
+      }
+    } else {
+      // Ödeme planı girilmemişse tüm tahmini endMonth'a düşer
+      if (!p.endYear || !p.endMonth) continue;
+      const key = `${p.endYear}_${p.endMonth}`;
+      if (!agg[key]) agg[key] = emptyMonthData(p.endYear, p.endMonth);
+      const est = (p.budget || 0) * prob;
+      if (est > 0) {
+        agg[key].potPrije += est;
+        agg[key].potPrijeBreakdown.push({ id: p.id, name: p.name, amount: est });
+        recalcTotals(agg[key]);
+      }
     }
   }
 
