@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { useState, useEffect, useRef } from 'react';
 import LoginPage from './auth/LoginPage';
@@ -168,6 +168,11 @@ function TopBar({ user, logout, theme, toggleTheme }) {
   );
 }
 
+function CategoryProjectsPage() {
+  const { categoryId } = useParams();
+  return <ProjectsPage categoryId={categoryId} />;
+}
+
 function AppContent() {
   const { user, loading, logout } = useAuth();
 
@@ -209,6 +214,7 @@ function AppContent() {
           <Routes>
             <Route path="/" element={<Navigate to="/projects" replace />} />
             <Route path="/projects" element={<ProjectsPage />} />
+            <Route path="/category/:categoryId" element={<CategoryProjectsPage />} />
             <Route path="/products" element={<ProductsPage />} />
             <Route path="/seniorities" element={<SenioritiesPage />} />
             <Route path="/personnel" element={<PersonnelPage />} />

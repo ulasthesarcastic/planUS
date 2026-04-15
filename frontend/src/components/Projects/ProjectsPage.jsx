@@ -747,7 +747,7 @@ function MonthYearSelect({ month, year, onMonthChange, onYearChange, allowEmpty 
 }
 
 // ── PROJE FORMU MODALI ──────────────────────────────────────────
-function ProjectModal({ project, personnel, projectTypes = [], categories = [], onSave, onClose }) {
+function ProjectModal({ project, personnel, projectTypes = [], categories = [], lockedCategoryId, onSave, onClose }) {
   const isEdit = !!project;
   const [units, setUnits] = useState([]);
   const [workflowSteps, setWorkflowSteps] = useState([]);
@@ -769,7 +769,7 @@ function ProjectModal({ project, personnel, projectTypes = [], categories = [], 
     startMonth: new Date().getMonth()+1, startYear: currentYear,
     endMonth: new Date().getMonth()+1, endYear: currentYear+1,
     budget: '', budgetCurrency: 'TRY', projectManagerId: '', techLeadId: '',
-    unitId: '', projectType: '', categoryId: '', currentStepId: '',
+    unitId: '', projectType: '', categoryId: lockedCategoryId || '', currentStepId: '',
     projectStatus: 'BASLADI', probability: 50,
   });
   const [error, setError] = useState('');
@@ -819,6 +819,7 @@ function ProjectModal({ project, personnel, projectTypes = [], categories = [], 
 
   const handleSave = async () => {
     if (!form.name.trim()) return setError('Proje adı zorunludur.');
+    if (!form.categoryId) return setError('Kategori seçilmelidir.');
     if (isEdit) {
       const dateChanged =
         form.startYear !== project.startYear || form.startMonth !== project.startMonth ||
@@ -891,17 +892,20 @@ function ProjectModal({ project, personnel, projectTypes = [], categories = [], 
             />
           </div>
           <div className="form-group">
-            <label className="form-label">Kategori</label>
-            <SearchableSelect
-              value={form.categoryId || ''}
-              onChange={v => { set('categoryId', v); set('currentStepId', ''); }}
-              placeholder="— Seçilmedi —"
-              style={{ width: '100%' }}
-              options={[
-                { value: '', label: '— Seçilmedi —' },
-                ...categories.map(c => ({ value: c.id, label: c.name })),
-              ]}
-            />
+            <label className="form-label">Kategori <span style={{ color: 'var(--danger)' }}>*</span></label>
+            {lockedCategoryId && !isEdit ? (
+              <div className="form-input" style={{ color: 'var(--text-secondary)', background: 'var(--bg-secondary)', cursor: 'default' }}>
+                {categories.find(c => c.id === lockedCategoryId)?.name || lockedCategoryId}
+              </div>
+            ) : (
+              <SearchableSelect
+                value={form.categoryId || ''}
+                onChange={v => { set('categoryId', v); set('currentStepId', ''); }}
+                placeholder="— Seçin —"
+                style={{ width: '100%' }}
+                options={categories.map(c => ({ value: c.id, label: c.name }))}
+              />
+            )}
           </div>
         </div>
         {/* Yaşam döngüsü statüsü */}
@@ -1725,7 +1729,7 @@ export function ProjectDetail({ project, allPersonnel, allProducts, units, senio
 }
 
 // ── ANA SAYFA ────────────────────────────────────────────────────
-export default function ProjectsPage() {
+export default function ProjectsPage({ categoryId: propCategoryId }) {
   const { user } = useAuth();
   const filterKey = user ? `projects_filter_${user.username}` : 'projects_filter';
 
@@ -1858,8 +1862,10 @@ export default function ProjectsPage() {
   }
   // Enrich projects with dynamically calculated potentialSales
   // POTANSIYEL statüsündeki projeler sadece Potansiyel Projeler sayfasında görünür
+  // Kategori sayfasındaysa yalnızca o kategorideki projeler listelenir
   const enrichedProjects = projects
     .filter(p => !p.projectStatus || p.projectStatus !== 'POTANSIYEL')
+    .filter(p => !propCategoryId || String(p.categoryId) === String(propCategoryId))
     .map(p => ({ ...p, potentialSales: potentialMap[String(p.id)] || 0 }));
 
   const counts = Object.fromEntries(
@@ -1926,7 +1932,9 @@ export default function ProjectsPage() {
     <div>
       <div className="page-header">
         <div>
-          <div className="page-title">Proje Yönetimi</div>
+          <div className="page-title">
+            {propCategoryId ? (categories.find(c => c.id === propCategoryId)?.name || '') + ' Yönetimi' : 'Proje Yönetimi'}
+          </div>
           <div className="page-subtitle">Projeleri tanımlayın ve yönetin</div>
         </div>
         <button className="btn btn-primary" onClick={() => { setEditing(null); setModalOpen(true); }}>
@@ -1956,6 +1964,7 @@ export default function ProjectsPage() {
 
       {modalOpen && (
         <ProjectModal project={editing} personnel={personnel} projectTypes={projectTypes} categories={categories}
+          lockedCategoryId={!editing ? propCategoryId : undefined}
           onSave={() => { setModalOpen(false); load(); if (selectedProject) refreshSelected(); }}
           onClose={() => setModalOpen(false)} />
       )}

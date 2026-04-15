@@ -1,6 +1,7 @@
 import { NavLink, useLocation, useNavigate, Link } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { projectCategoryApi } from '../services/api';
 import logo from '../assets/logo.png';
 import logoIcon from '../assets/logo-icon.png';
 
@@ -41,6 +42,13 @@ export default function Sidebar() {
 
   const collapseKey = user ? `sidebar_collapsed_${user.username}` : 'sidebar_collapsed';
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(collapseKey) === 'true');
+  const [categories, setCategories] = useState([]);
+
+  useEffect(() => {
+    projectCategoryApi.getAll()
+      .then(res => setCategories(res.data || []))
+      .catch(() => {});
+  }, []);
 
   const inSettings = SETTINGS_ROUTES.includes(location.pathname);
 
@@ -72,7 +80,7 @@ export default function Sidebar() {
         {inSettings ? (
           <div className="sidebar-section">
             <button
-              onClick={() => navigate('/projects')}
+              onClick={() => navigate(categories.length > 0 ? `/category/${categories[0].id}` : '/projects')}
               style={{
                 display: 'flex', alignItems: 'center', gap: 8, justifyContent: collapsed ? 'center' : 'flex-start',
                 width: '100%', padding: collapsed ? '7px' : '7px 10px', marginBottom: 6,
@@ -107,12 +115,20 @@ export default function Sidebar() {
           </div>
         ) : (
           <>
-            <div className="sidebar-section">
-              {!collapsed && <div className="sidebar-section-label">Projeler</div>}
-              <NavLink to="/projects" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Proje Yönetimi">
-                <Icons.Folder />{!collapsed && <span className="nav-item-label">Proje Yönetimi</span>}
-              </NavLink>
-            </div>
+            {/* Dinamik kategori bölümleri */}
+            {categories.map(cat => (
+              <div key={cat.id} className="sidebar-section">
+                {!collapsed && <div className="sidebar-section-label">{cat.name}</div>}
+                <NavLink
+                  to={`/category/${cat.id}`}
+                  className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                  title={`${cat.name} Yönetimi`}
+                  style={cat.color ? { '--cat-color': cat.color } : {}}
+                >
+                  <Icons.Folder />{!collapsed && <span className="nav-item-label">{cat.name} Yönetimi</span>}
+                </NavLink>
+              </div>
+            ))}
 
             <div className="sidebar-section">
               {!collapsed && <div className="sidebar-section-label">Ürünler</div>}
