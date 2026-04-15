@@ -356,6 +356,21 @@ function EditStepDialog({ step, allSteps, onSave, onRemoveTransition, onClose })
 // ─── Color Palette ───────────────────────────────────────────────────
 const PALETTE = ['#6366f1','#22c55e','#f59e0b','#ef4444','#06b6d4','#8b5cf6','#ec4899','#14b8a6'];
 
+const CAT_ICONS = {
+  folder:   { label: 'Klasör',    Icon: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> },
+  box:      { label: 'Kutu',      Icon: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg> },
+  building: { label: 'Bina',      Icon: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg> },
+  grid:     { label: 'Grid',      Icon: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg> },
+  trend:    { label: 'Grafik',    Icon: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg> },
+  dollar:   { label: 'Para',      Icon: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> },
+  users:    { label: 'Ekip',      Icon: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg> },
+  award:    { label: 'Ödül',      Icon: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></svg> },
+  code:     { label: 'Kod',       Icon: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> },
+  layers:   { label: 'Katmanlar', Icon: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg> },
+  cpu:      { label: 'İşlemci',   Icon: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg> },
+  star:     { label: 'Yıldız',    Icon: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> },
+};
+
 // ─── Main Categories Page ────────────────────────────────────────────
 export default function ProjectCategoriesPage() {
   const [categories, setCategories] = useState([]);
@@ -374,16 +389,17 @@ export default function ProjectCategoriesPage() {
   };
   useEffect(() => { load(); }, []);
 
-  const openNew  = () => { setForm({ name: '', color: PALETTE[0] }); setError(''); setEditingCat('new'); };
-  const openEdit = (cat) => { setForm({ name: cat.name, color: cat.color || PALETTE[0] }); setError(''); setEditingCat(cat); };
+  const openNew  = () => { setForm({ name: '', color: PALETTE[0], icon: 'folder', sectionLabel: '', menuLabel: '' }); setError(''); setEditingCat('new'); };
+  const openEdit = (cat) => { setForm({ name: cat.name, color: cat.color || PALETTE[0], icon: cat.icon || 'folder', sectionLabel: cat.sectionLabel || '', menuLabel: cat.menuLabel || '' }); setError(''); setEditingCat(cat); };
   const closeForm = () => { setEditingCat(null); setError(''); };
 
   const save = async () => {
     if (!form.name.trim()) return setError('Kategori adı zorunludur.');
     setSaving(true); setError('');
     try {
-      if (editingCat === 'new') await projectCategoryApi.create({ name: form.name.trim(), color: form.color });
-      else await projectCategoryApi.update(editingCat.id, { name: form.name.trim(), color: form.color });
+      const payload = { name: form.name.trim(), color: form.color, icon: form.icon, sectionLabel: form.sectionLabel.trim() || null, menuLabel: form.menuLabel.trim() || null };
+      if (editingCat === 'new') await projectCategoryApi.create(payload);
+      else await projectCategoryApi.update(editingCat.id, payload);
       closeForm(); load();
     } catch (e) { setError(e.response?.data?.error || 'Bir hata oluştu.'); }
     finally { setSaving(false); }
@@ -394,11 +410,29 @@ export default function ProjectCategoriesPage() {
     catch (e) { setError(e.response?.data?.error || 'Silinemedi.'); setDeleteCatId(null); }
   };
 
+  const reorder = async (index, dir) => {
+    const sorted = [...categories];
+    const swapIdx = index + dir;
+    if (swapIdx < 0 || swapIdx >= sorted.length) return;
+    const a = sorted[index];
+    const b = sorted[swapIdx];
+    await Promise.all([
+      projectCategoryApi.update(a.id, { ...a, stepOrder: b.stepOrder }),
+      projectCategoryApi.update(b.id, { ...b, stepOrder: a.stepOrder }),
+    ]);
+    load();
+  };
+
   if (workflowCat) {
     return <WorkflowEditor categoryId={workflowCat.id} categoryName={workflowCat.name} onBack={() => setWorkflowCat(null)} />;
   }
 
   if (loading) return <div className="loading">Yükleniyor...</div>;
+
+  const CatIcon = ({ iconKey, color }) => {
+    const cfg = CAT_ICONS[iconKey] || CAT_ICONS.folder;
+    return <span style={{ color }}><cfg.Icon /></span>;
+  };
 
   return (
     <div>
@@ -435,7 +469,39 @@ export default function ProjectCategoriesPage() {
               ))}
             </div>
           </div>
-          <div className="form-actions">
+          <div className="form-group">
+            <label className="form-label">İkon</label>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {Object.entries(CAT_ICONS).map(([key, { label, Icon }]) => (
+                <button key={key} onClick={() => setForm(f => ({ ...f, icon: key }))} title={label} style={{
+                  width: 34, height: 34, borderRadius: 8, cursor: 'pointer',
+                  border: `2px solid ${form.icon === key ? 'var(--accent)' : 'var(--border)'}`,
+                  background: form.icon === key ? 'var(--accent-dim)' : 'var(--bg-secondary)',
+                  color: form.icon === key ? 'var(--accent)' : 'var(--text-secondary)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Icon />
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+              <label className="form-label">Sidebar Başlığı</label>
+              <input className="form-input" value={form.sectionLabel}
+                onChange={e => setForm(f => ({ ...f, sectionLabel: e.target.value }))}
+                placeholder={form.name || 'örn. Proje'} />
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Boş bırakılırsa kategori adı kullanılır</div>
+            </div>
+            <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+              <label className="form-label">Menü Etiketi</label>
+              <input className="form-input" value={form.menuLabel}
+                onChange={e => setForm(f => ({ ...f, menuLabel: e.target.value }))}
+                placeholder={(form.name || 'Proje') + ' Yönetimi'} />
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Boş bırakılırsa "{form.name || 'Kategori'} Yönetimi" kullanılır</div>
+            </div>
+          </div>
+          <div className="form-actions" style={{ marginTop: 16 }}>
             <button className="btn btn-ghost" onClick={closeForm}>İptal</button>
             <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? 'Kaydediliyor...' : 'Kaydet'}</button>
           </div>
@@ -447,7 +513,7 @@ export default function ProjectCategoriesPage() {
         <div className="empty-state"><p>Henüz kategori tanımlanmamış.</p></div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {[...categories].sort((a, b) => a.name.localeCompare(b.name, 'tr')).map(cat => (
+          {categories.map((cat, index) => (
             <div key={cat.id} style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               padding: '14px 18px', borderRadius: 10,
@@ -455,7 +521,14 @@ export default function ProjectCategoriesPage() {
               borderLeft: `4px solid ${cat.color || 'var(--accent)'}`,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 10, height: 10, borderRadius: '50%', background: cat.color || 'var(--accent)' }} />
+                {/* Up/Down ordering */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <button onClick={() => reorder(index, -1)} disabled={index === 0}
+                    style={{ background: 'none', border: 'none', cursor: index === 0 ? 'default' : 'pointer', padding: '1px 4px', color: index === 0 ? 'var(--text-muted)' : 'var(--text-secondary)', opacity: index === 0 ? 0.3 : 1, lineHeight: 1 }}>▲</button>
+                  <button onClick={() => reorder(index, 1)} disabled={index === categories.length - 1}
+                    style={{ background: 'none', border: 'none', cursor: index === categories.length - 1 ? 'default' : 'pointer', padding: '1px 4px', color: index === categories.length - 1 ? 'var(--text-muted)' : 'var(--text-secondary)', opacity: index === categories.length - 1 ? 0.3 : 1, lineHeight: 1 }}>▼</button>
+                </div>
+                <CatIcon iconKey={cat.icon || 'folder'} color={cat.color || 'var(--accent)'} />
                 <span style={{ fontWeight: 600, fontSize: 14 }}>{cat.name}</span>
               </div>
               <div style={{ display: 'flex', gap: 6 }}>

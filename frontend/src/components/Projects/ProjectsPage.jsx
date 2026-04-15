@@ -1942,18 +1942,20 @@ export default function ProjectsPage({ categoryId: propCategoryId }) {
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
-        {[...projectTypes.map(t => ({ id: t.id, label: t.name })), { id: 'ALL', label: 'Tümü' }].map(t => (
-          <button key={t.id} onClick={() => { setTypeFilter(t.id); localStorage.setItem(filterKey, t.id); }} style={{
-            padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-            border: '1px solid var(--border)', fontFamily: 'DM Sans, sans-serif',
-            background: typeFilter === t.id ? 'var(--accent)' : 'var(--bg-secondary)',
-            color: typeFilter === t.id ? '#fff' : 'var(--text-secondary)',
-          }}>
-            {t.label} ({counts[t.id] ?? 0})
-          </button>
-        ))}
-      </div>
+      {!propCategoryId && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
+          {[...projectTypes.map(t => ({ id: t.id, label: t.name })), { id: 'ALL', label: 'Tümü' }].map(t => (
+            <button key={t.id} onClick={() => { setTypeFilter(t.id); localStorage.setItem(filterKey, t.id); }} style={{
+              padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              border: '1px solid var(--border)', fontFamily: 'DM Sans, sans-serif',
+              background: typeFilter === t.id ? 'var(--accent)' : 'var(--bg-secondary)',
+              color: typeFilter === t.id ? '#fff' : 'var(--text-secondary)',
+            }}>
+              {t.label} ({counts[t.id] ?? 0})
+            </button>
+          ))}
+        </div>
+      )}
 
       {loading ? (
         <div className="loading">Yükleniyor...</div>

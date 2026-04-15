@@ -40,4 +40,18 @@ public class ProjectCategory {
 
     public CategoryType getCategoryType() { return categoryType; }
     public void setCategoryType(CategoryType categoryType) { this.categoryType = categoryType; }
+
+    private String icon;
+
+    public String getIcon() { return icon; }
+    public void setIcon(String icon) { this.icon = icon; }
+
+    private String sectionLabel;
+    private String menuLabel;
+
+    public String getSectionLabel() { return sectionLabel; }
+    public void setSectionLabel(String sectionLabel) { this.sectionLabel = sectionLabel; }
+
+    public String getMenuLabel() { return menuLabel; }
+    public void setMenuLabel(String menuLabel) { this.menuLabel = menuLabel; }
 }
