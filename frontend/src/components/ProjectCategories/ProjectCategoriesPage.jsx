@@ -9,6 +9,7 @@ function XIcon()     { return <svg width="16" height="16" fill="none" stroke="cu
 function BackIcon()  { return <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>; }
 function SaveIcon()  { return <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>; }
 function TreeIcon()  { return <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>; }
+function GripIcon()  { return <svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor"><circle cx="3" cy="3"  r="1.5"/><circle cx="3" cy="8"  r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="7" cy="3"  r="1.5"/><circle cx="7" cy="8"  r="1.5"/><circle cx="7" cy="13" r="1.5"/></svg>; }
 
 // ─── Step type config ────────────────────────────────────────────────
 const STEP_TYPES = {
@@ -381,6 +382,8 @@ export default function ProjectCategoriesPage() {
   const [form, setForm] = useState({ name: '', color: PALETTE[0] });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [dragOverIdx, setDragOverIdx] = useState(null);
+  const dragFromIdx = useRef(null);
 
   const load = async () => {
     try { const r = await projectCategoryApi.getAll(); setCategories(r.data || []); }
@@ -420,6 +423,38 @@ export default function ProjectCategoriesPage() {
       projectCategoryApi.update(a.id, { ...a, stepOrder: b.stepOrder }),
       projectCategoryApi.update(b.id, { ...b, stepOrder: a.stepOrder }),
     ]);
+    load();
+  };
+
+  const handleDragStart = (e, index) => {
+    dragFromIdx.current = index;
+    e.dataTransfer.effectAllowed = 'move';
+  };
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverIdx(index);
+  };
+  const handleDragLeave = () => setDragOverIdx(null);
+  const handleDragEnd  = () => { setDragOverIdx(null); dragFromIdx.current = null; };
+  const handleDrop = async (e, toIndex) => {
+    e.preventDefault();
+    setDragOverIdx(null);
+    const fromIndex = dragFromIdx.current;
+    dragFromIdx.current = null;
+    if (fromIndex === null || fromIndex === toIndex) return;
+    // Reorder array
+    const newOrder = [...categories];
+    const [moved] = newOrder.splice(fromIndex, 1);
+    newOrder.splice(toIndex, 0, moved);
+    // Optimistic update
+    const updated = newOrder.map((cat, i) => ({ ...cat, stepOrder: i + 1 }));
+    setCategories(updated);
+    // Persist only changed items
+    const updates = updated
+      .filter((cat, i) => categories.find(c => c.id === cat.id)?.stepOrder !== cat.stepOrder)
+      .map(cat => projectCategoryApi.update(cat.id, cat));
+    await Promise.all(updates);
     load();
   };
 
@@ -514,22 +549,38 @@ export default function ProjectCategoriesPage() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {categories.map((cat, index) => (
-            <div key={cat.id} style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '14px 18px', borderRadius: 10,
-              border: '1px solid var(--border)', background: 'var(--bg-card)',
-              borderLeft: `4px solid ${cat.color || 'var(--accent)'}`,
-            }}>
+            <div
+              key={cat.id}
+              draggable
+              onDragStart={e => handleDragStart(e, index)}
+              onDragOver={e => handleDragOver(e, index)}
+              onDragLeave={handleDragLeave}
+              onDrop={e => handleDrop(e, index)}
+              onDragEnd={handleDragEnd}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '14px 18px', borderRadius: 10,
+                border: `1px solid ${dragOverIdx === index ? 'var(--accent)' : 'var(--border)'}`,
+                background: dragOverIdx === index ? 'var(--accent-dim)' : 'var(--bg-card)',
+                borderLeft: `4px solid ${cat.color || 'var(--accent)'}`,
+                transition: 'border-color 0.15s, background 0.15s',
+                cursor: 'grab',
+              }}
+            >
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                {/* Up/Down ordering */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <button onClick={() => reorder(index, -1)} disabled={index === 0}
-                    style={{ background: 'none', border: 'none', cursor: index === 0 ? 'default' : 'pointer', padding: '1px 4px', color: index === 0 ? 'var(--text-muted)' : 'var(--text-secondary)', opacity: index === 0 ? 0.3 : 1, lineHeight: 1 }}>▲</button>
-                  <button onClick={() => reorder(index, 1)} disabled={index === categories.length - 1}
-                    style={{ background: 'none', border: 'none', cursor: index === categories.length - 1 ? 'default' : 'pointer', padding: '1px 4px', color: index === categories.length - 1 ? 'var(--text-muted)' : 'var(--text-secondary)', opacity: index === categories.length - 1 ? 0.3 : 1, lineHeight: 1 }}>▼</button>
-                </div>
+                {/* Drag handle */}
+                <span style={{ color: 'var(--text-muted)', opacity: 0.5, display: 'flex', alignItems: 'center' }}>
+                  <GripIcon />
+                </span>
                 <CatIcon iconKey={cat.icon || 'folder'} color={cat.color || 'var(--accent)'} />
-                <span style={{ fontWeight: 600, fontSize: 14 }}>{cat.name}</span>
+                <div>
+                  <span style={{ fontWeight: 600, fontSize: 14 }}>{cat.name}</span>
+                  {(cat.sectionLabel || cat.menuLabel) && (
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 10 }}>
+                      {cat.sectionLabel || cat.name} / {cat.menuLabel || (cat.name + ' Yönetimi')}
+                    </span>
+                  )}
+                </div>
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
                 <button className="btn btn-ghost" onClick={() => setWorkflowCat(cat)}
