@@ -7,4 +7,5 @@ import java.util.List;
 public interface ProjectRepository extends JpaRepository<Project, String> {
     boolean existsByProjectType(String projectType);
     List<Project> findByCategoryIdIsNull();
+    List<Project> findByProjectStatus(String projectStatus);
 }
