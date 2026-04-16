@@ -1747,7 +1747,7 @@ export default function ProjectsPage({ categoryId: propCategoryId }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
-  const [typeFilter, setTypeFilter] = useState(() => localStorage.getItem(filterKey) || 'ALL');
+  const [typeFilter, setTypeFilter] = useState(() => propCategoryId ? 'ALL' : (localStorage.getItem(filterKey) || 'ALL'));
 
   const location = useLocation();
   const [pendingOpenId, setPendingOpenId] = useState(null);
