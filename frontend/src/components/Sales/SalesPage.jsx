@@ -64,43 +64,6 @@ function EditIcon()  { return <svg width="13" height="13" fill="none" stroke="cu
 function TrashIcon() { return <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>; }
 function XIcon()     { return <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>; }
 
-function ShiftConfirmModal({ info, onApply, onSkip, onClose }) {
-  const { offset, dropped, droppedMonths } = info;
-  const dir = offset > 0 ? 'ileri' : 'geri';
-  const abs = Math.abs(offset);
-  return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <div className="modal-title">Kaynak Planlaması Etkilenecek</div>
-          <button className="btn-icon" onClick={onClose}><XIcon /></button>
-        </div>
-        <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.6 }}>
-          Proje başlangıcı <strong>{abs} ay {dir}</strong> kaydırıldı.
-          Bu projedeki tüm kaynak planlaması da aynı oranda ötelenecek.
-        </p>
-        {dropped > 0 && (
-          <div style={{ padding: '10px 14px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 8, marginBottom: 16 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#f87171', marginBottom: 4 }}>
-              {dropped} kayıt proje süresi dışına çıkacak ve silinecek:
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{droppedMonths.join(', ')}</div>
-          </div>
-        )}
-        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 0 }}>
-          "Sadece Tarihi Kaydet" seçeneğiyle kaynak planlamasına dokunmadan yalnızca proje tarihini güncelleyebilirsiniz.
-        </p>
-        <div className="form-actions">
-          <button className="btn btn-ghost" onClick={onClose}>İptal</button>
-          <button className="btn btn-ghost" onClick={onSkip}>Sadece Tarihi Kaydet</button>
-          <button className="btn btn-primary" onClick={onApply}>
-            {dropped > 0 ? `Planlamayı Güncelle (${dropped} kayıt silinecek)` : 'Planlamayı Güncelle'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ── Modal: Potansiyel Proje Oluştur / Düzenle ────────────────────────────────
 function PotentialProjectModal({ project, personnel, onSave, onClose }) {
@@ -131,20 +94,37 @@ function PotentialProjectModal({ project, personnel, onSave, onClose }) {
   });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  const [shiftPending, setShiftPending] = useState(null);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const dur = Number(form.durationMonths);
   const calcEnd = dur >= 1 ? computeEnd(form.startMonth, form.startYear, dur) : null;
 
-  const executeSave = async (payload, entries, offset, newEM, newEY) => {
-    setSaving(true);
+  const handleSave = async () => {
+    if (!form.name.trim()) return setError('Proje adı zorunludur.');
+    if (!dur || dur < 1) return setError('Proje süresi girilmelidir.');
+    setError(''); setSaving(true);
     try {
+      const { endMonth, endYear } = computeEnd(form.startMonth, form.startYear, dur);
+      const payload = {
+        name: form.name,
+        budget: parseFloat(form.budget) || 0,
+        budgetCurrency: form.budgetCurrency,
+        probability: form.probability,
+        startMonth: form.startMonth,
+        startYear: form.startYear,
+        endMonth,
+        endYear,
+        projectManagerId: form.projectManagerId || null,
+        projectStatus: 'POTANSIYEL',
+      };
       if (isEdit) {
         await projectApi.update(project.id, { ...project, ...payload });
-        if (entries && offset !== null) {
-          const newPlan = applyShift(entries, offset, newEM, newEY);
-          await projectApi.updateResourcePlan(project.id, newPlan);
+        const entries = project.resourcePlan || [];
+        if (entries.length > 0) {
+          const info = buildShiftInfo(entries, project.startMonth, project.startYear, form.startMonth, form.startYear, endMonth, endYear);
+          if (info) {
+            await projectApi.updateResourcePlan(project.id, applyShift(entries, info.offset, endMonth, endYear));
+          }
         }
       } else {
         await projectApi.create(payload);
@@ -155,46 +135,7 @@ function PotentialProjectModal({ project, personnel, onSave, onClose }) {
     } finally { setSaving(false); }
   };
 
-  const handleSave = async () => {
-    if (!form.name.trim()) return setError('Proje adı zorunludur.');
-    if (!dur || dur < 1) return setError('Proje süresi girilmelidir.');
-    setError('');
-    const { endMonth, endYear } = computeEnd(form.startMonth, form.startYear, dur);
-    const payload = {
-      name: form.name,
-      budget: parseFloat(form.budget) || 0,
-      budgetCurrency: form.budgetCurrency,
-      probability: form.probability,
-      startMonth: form.startMonth,
-      startYear: form.startYear,
-      endMonth,
-      endYear,
-      projectManagerId: form.projectManagerId || null,
-      projectStatus: 'POTANSIYEL',
-    };
-    if (isEdit) {
-      const entries = project.resourcePlan || [];
-      if (entries.length > 0) {
-        const info = buildShiftInfo(entries, project.startMonth, project.startYear, form.startMonth, form.startYear, endMonth, endYear);
-        if (info) {
-          setShiftPending({ payload, info, entries, endMonth, endYear });
-          return;
-        }
-      }
-    }
-    await executeSave(payload, null, null, null, null);
-  };
-
   return (
-    <>
-    {shiftPending && (
-      <ShiftConfirmModal
-        info={shiftPending.info}
-        onApply={() => { const p = shiftPending; setShiftPending(null); executeSave(p.payload, p.entries, p.info.offset, p.endMonth, p.endYear); }}
-        onSkip={() => { const p = shiftPending; setShiftPending(null); executeSave(p.payload, null, null, null, null); }}
-        onClose={() => setShiftPending(null)}
-      />
-    )}
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal">
         <div className="modal-header">
@@ -296,7 +237,6 @@ function PotentialProjectModal({ project, personnel, onSave, onClose }) {
         </div>
       </div>
     </div>
-    </>
   );
 }
 
@@ -407,8 +347,6 @@ export default function SalesPage() {
   const [selectedProject, setSelectedProject] = useState(null);
   const [editing, setEditing] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
-  const [fixModal, setFixModal] = useState(null);
-  const [fixing, setFixing] = useState(false);
 
   const load = async () => {
     const [pRes, perRes, prRes, uRes, sRes] = await Promise.all([
@@ -429,33 +367,6 @@ export default function SalesPage() {
   useEffect(() => { load(); }, []);
 
   const personnelMap = Object.fromEntries(personnel.map(p => [String(p.id), p]));
-
-  const detectMisaligned = () => potProjects
-    .filter(p => p.resourcePlan && p.resourcePlan.length > 0 && p.startMonth && p.startYear && p.endMonth && p.endYear)
-    .map(project => {
-      const earliest = project.resourcePlan.reduce((min, e) => {
-        const t = e.year * 12 + e.month;
-        return t < min.t ? { t, month: e.month, year: e.year } : min;
-      }, { t: Infinity, month: null, year: null });
-      if (!earliest.month) return null;
-      const info = buildShiftInfo(project.resourcePlan, earliest.month, earliest.year, project.startMonth, project.startYear, project.endMonth, project.endYear);
-      if (!info) return null;
-      return { project, info };
-    })
-    .filter(Boolean);
-
-  const handleFixAll = async () => {
-    setFixing(true);
-    try {
-      for (const { project, info } of fixModal.items) {
-        const newPlan = applyShift(project.resourcePlan, info.offset, project.endMonth, project.endYear);
-        await projectApi.updateResourcePlan(project.id, newPlan);
-      }
-      setFixModal(null);
-      load();
-    } catch (e) { console.error(e); }
-    finally { setFixing(false); }
-  };
 
   const handleConvert = async (project) => {
     await projectApi.update(project.id, { ...project, projectStatus: 'BASLADI' });
@@ -510,14 +421,9 @@ export default function SalesPage() {
           <div className="page-title">Potansiyel Projeler</div>
           <div className="page-subtitle">{potProjects.length} proje takip ediliyor</div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => { const items = detectMisaligned(); setFixModal({ items }); }}>
-            Planlamaları Kontrol Et
-          </button>
-          <button className="btn btn-primary" onClick={() => setEditing({})}>
-            <PlusIcon /> Yeni Proje
-          </button>
-        </div>
+        <button className="btn btn-primary" onClick={() => setEditing({})}>
+          <PlusIcon /> Yeni Proje
+        </button>
       </div>
 
       {/* Summary */}
@@ -573,51 +479,6 @@ export default function SalesPage() {
         </div>
       )}
 
-      {fixModal && (
-        <div className="modal-overlay" onClick={() => setFixModal(null)}>
-          <div className="modal" style={{ maxWidth: 500 }} onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <div className="modal-title">Kaynak Planlaması Kontrolü</div>
-              <button className="btn-icon" onClick={() => setFixModal(null)}><XIcon /></button>
-            </div>
-            {fixModal.items.length === 0 ? (
-              <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 16 }}>
-                Hizalanmamış proje bulunamadı. Tüm planlamalar proje tarihlerine göre doğru.
-              </p>
-            ) : (
-              <>
-                <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 12 }}>
-                  {fixModal.items.length} projede kaynak planlaması proje tarihleriyle hizalı değil:
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16, maxHeight: 320, overflowY: 'auto' }}>
-                  {fixModal.items.map(({ project, info }) => (
-                    <div key={project.id} style={{ padding: '10px 14px', background: 'var(--bg-secondary)', borderRadius: 8, border: '1px solid var(--border)' }}>
-                      <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>{project.name}</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                        {Math.abs(info.offset)} ay {info.offset > 0 ? 'ileri' : 'geri'} ötelenecek
-                        {info.dropped > 0 && ` · ${info.dropped} kayıt silinecek`}
-                      </div>
-                      {info.droppedMonths.length > 0 && (
-                        <div style={{ fontSize: 11, color: '#f87171', marginTop: 2 }}>
-                          Silinecek: {info.droppedMonths.join(', ')}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-            <div className="form-actions">
-              <button className="btn btn-ghost" onClick={() => setFixModal(null)}>Kapat</button>
-              {fixModal.items.length > 0 && (
-                <button className="btn btn-primary" onClick={handleFixAll} disabled={fixing}>
-                  {fixing ? 'Düzeltiliyor...' : 'Tümünü Düzelt'}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
