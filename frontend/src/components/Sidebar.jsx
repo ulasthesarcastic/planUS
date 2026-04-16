@@ -130,9 +130,9 @@ export default function Sidebar() {
           </div>
         ) : (
           <>
-            {/* Yönetim bölümü */}
+            {/* Portföy Yönetimi bölümü */}
             <div className="sidebar-section">
-              {!collapsed && <div className="sidebar-section-label">Yönetim</div>}
+              {!collapsed && <div className="sidebar-section-label">Portföy Yönetimi</div>}
               {categories.map(cat => {
                 const menuLabel = cat.menuLabel || (cat.name + ' Yönetimi');
                 const CIcon = CAT_ICONS[cat.icon] || CAT_ICONS.folder;
@@ -157,6 +157,17 @@ export default function Sidebar() {
               </NavLink>
             </div>
 
+            {/* İş Geliştirme bölümü */}
+            <div className="sidebar-section">
+              {!collapsed && <div className="sidebar-section-label">İş Geliştirme</div>}
+              <NavLink to="/sales" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Potansiyel Projeler">
+                <Icons.TrendUp />{!collapsed && <span className="nav-item-label">Potansiyel Projeler</span>}
+              </NavLink>
+              <NavLink to="/potansiyel-siparisler" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Potansiyel Siparişler">
+                <Icons.Box />{!collapsed && <span className="nav-item-label">Potansiyel Siparişler</span>}
+              </NavLink>
+            </div>
+
             {/* Finans bölümü */}
             <div className="sidebar-section">
               {!collapsed && <div className="sidebar-section-label">Finans</div>}
@@ -165,12 +176,6 @@ export default function Sidebar() {
               </NavLink>
               <NavLink to="/budget" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Bütçe Yönetimi">
                 <Icons.DollarSign />{!collapsed && <span className="nav-item-label">Bütçe Yönetimi</span>}
-              </NavLink>
-              <NavLink to="/sales" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Potansiyel Projeler">
-                <Icons.TrendUp />{!collapsed && <span className="nav-item-label">Potansiyel Projeler</span>}
-              </NavLink>
-              <NavLink to="/potansiyel-siparisler" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Potansiyel Siparişler">
-                <Icons.Box />{!collapsed && <span className="nav-item-label">Potansiyel Siparişler</span>}
               </NavLink>
             </div>
           </>
