@@ -774,6 +774,7 @@ function ProjectModal({ project, personnel, projectTypes = [], categories = [], 
   });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [dateWarnCount, setDateWarnCount] = useState(0);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   useEffect(() => {
@@ -819,12 +820,44 @@ function ProjectModal({ project, personnel, projectTypes = [], categories = [], 
   const handleSave = async () => {
     if (!form.name.trim()) return setError('Proje adı zorunludur.');
     if (!form.categoryId) return setError('Kategori seçilmelidir.');
-    const dateChanged = isEdit && (
-      form.startYear !== project.startYear || form.startMonth !== project.startMonth ||
-      form.endYear   !== project.endYear   || form.endMonth   !== project.endMonth
-    );
-    doSave(dateChanged);
+    if (isEdit) {
+      const dateChanged =
+        form.startYear !== project.startYear || form.startMonth !== project.startMonth ||
+        form.endYear   !== project.endYear   || form.endMonth   !== project.endMonth;
+      if (dateChanged) {
+        const outOfRange = (project.resourcePlan || []).filter(entry => {
+          const afterStart = (entry.year > form.startYear) || (entry.year === form.startYear && entry.month >= form.startMonth);
+          const beforeEnd  = (entry.year < form.endYear)   || (entry.year === form.endYear   && entry.month <= form.endMonth);
+          return !(afterStart && beforeEnd);
+        });
+        if (outOfRange.length > 0) {
+          setDateWarnCount(outOfRange.length);
+          return;
+        }
+      }
+    }
+    doSave(false);
   };
+
+  if (dateWarnCount > 0) {
+    return (
+      <div className="modal-overlay">
+        <div className="modal" style={{ maxWidth: 440 }}>
+          <div className="modal-header">
+            <div className="modal-title">Tarih Aralığı Değişti</div>
+          </div>
+          <div style={{ padding: '16px 20px', color: 'var(--text-primary)', fontSize: 14, lineHeight: 1.6 }}>
+            Yeni tarih aralığı dışında kalan <strong>{dateWarnCount}</strong> kaynak planı girişi var.
+            Bu girişler silinecektir. Devam etmek istiyor musunuz?
+          </div>
+          <div style={{ display: 'flex', gap: 8, padding: '0 20px 16px', justifyContent: 'flex-end' }}>
+            <button className="btn btn-ghost" onClick={() => setDateWarnCount(0)}>İptal</button>
+            <button className="btn btn-primary" onClick={() => { setDateWarnCount(0); doSave(true); }}>Onayla</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="modal-overlay" onClick={e => e.target===e.currentTarget && onClose()}>

@@ -94,46 +94,84 @@ function PotentialProjectModal({ project, personnel, onSave, onClose }) {
   });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [shiftConfirm, setShiftConfirm] = useState(null); // { payload, info, entries, endMonth, endYear }
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const dur = Number(form.durationMonths);
   const calcEnd = dur >= 1 ? computeEnd(form.startMonth, form.startYear, dur) : null;
 
+  const doSave = async (payload, entries, info) => {
+    setSaving(true);
+    setShiftConfirm(null);
+    try {
+      await projectApi.update(project.id, { ...project, ...payload });
+      if (entries && info) {
+        await projectApi.updateResourcePlan(project.id, applyShift(entries, info.offset, payload.endMonth, payload.endYear));
+      }
+      onSave();
+    } catch (e) { setError(e.response?.data?.error || 'Bir hata oluştu.'); }
+    finally { setSaving(false); }
+  };
+
   const handleSave = async () => {
     if (!form.name.trim()) return setError('Proje adı zorunludur.');
     if (!dur || dur < 1) return setError('Proje süresi girilmelidir.');
-    setError(''); setSaving(true);
-    try {
-      const { endMonth, endYear } = computeEnd(form.startMonth, form.startYear, dur);
-      const payload = {
-        name: form.name,
-        budget: parseFloat(form.budget) || 0,
-        budgetCurrency: form.budgetCurrency,
-        probability: form.probability,
-        startMonth: form.startMonth,
-        startYear: form.startYear,
-        endMonth,
-        endYear,
-        projectManagerId: form.projectManagerId || null,
-        projectStatus: 'POTANSIYEL',
-      };
-      if (isEdit) {
-        await projectApi.update(project.id, { ...project, ...payload });
-        const entries = project.resourcePlan || [];
-        if (entries.length > 0) {
-          const info = buildShiftInfo(entries, project.startMonth, project.startYear, form.startMonth, form.startYear, endMonth, endYear);
-          if (info) {
-            await projectApi.updateResourcePlan(project.id, applyShift(entries, info.offset, endMonth, endYear));
-          }
-        }
-      } else {
-        await projectApi.create(payload);
-      }
-      onSave();
-    } catch (e) {
-      setError(e.response?.data?.error || 'Bir hata oluştu.');
-    } finally { setSaving(false); }
+    setError('');
+    const { endMonth, endYear } = computeEnd(form.startMonth, form.startYear, dur);
+    const payload = {
+      name: form.name,
+      budget: parseFloat(form.budget) || 0,
+      budgetCurrency: form.budgetCurrency,
+      probability: form.probability,
+      startMonth: form.startMonth,
+      startYear: form.startYear,
+      endMonth,
+      endYear,
+      projectManagerId: form.projectManagerId || null,
+      projectStatus: 'POTANSIYEL',
+    };
+    if (!isEdit) { setSaving(true); try { await projectApi.create(payload); onSave(); } catch(e) { setError(e.response?.data?.error || 'Bir hata oluştu.'); } finally { setSaving(false); } return; }
+    const entries = project.resourcePlan || [];
+    if (entries.length > 0) {
+      const info = buildShiftInfo(entries, project.startMonth, project.startYear, form.startMonth, form.startYear, endMonth, endYear);
+      if (info) { setShiftConfirm({ payload, info, entries }); return; }
+    }
+    doSave(payload, null, null);
   };
+
+  if (shiftConfirm) {
+    const { payload, info, entries } = shiftConfirm;
+    const abs = Math.abs(info.offset);
+    const dir = info.offset > 0 ? 'ileri' : 'geri';
+    return (
+      <div className="modal-overlay">
+        <div className="modal" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+          <div className="modal-header">
+            <div className="modal-title">Kaynak Planlaması Etkilenecek</div>
+            <button className="btn-icon" onClick={() => setShiftConfirm(null)}><XIcon /></button>
+          </div>
+          <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 12 }}>
+            Proje başlangıcı <strong>{abs} ay {dir}</strong> kaydırıldı.
+            Bu projedeki tüm kaynak planlaması da aynı oranda ötelenecek.
+          </p>
+          {info.dropped > 0 && (
+            <div style={{ padding: '10px 14px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 8, marginBottom: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#f87171', marginBottom: 4 }}>
+                {info.dropped} kayıt proje süresi dışına çıkacak ve silinecek:
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{info.droppedMonths.join(', ')}</div>
+            </div>
+          )}
+          <div className="form-actions">
+            <button className="btn btn-ghost" onClick={() => setShiftConfirm(null)}>İptal</button>
+            <button className="btn btn-primary" disabled={saving} onClick={() => doSave(payload, entries, info)}>
+              {saving ? 'Kaydediliyor...' : 'Onayla'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
