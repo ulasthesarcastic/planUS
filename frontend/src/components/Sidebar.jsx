@@ -1,7 +1,7 @@
 import { NavLink, useLocation, useNavigate, Link } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { projectCategoryApi } from '../services/api';
+import { useCategories } from '../hooks/useQueries';
 
 export function toSlug(name) {
   return name
@@ -70,13 +70,8 @@ export default function Sidebar() {
 
   const collapseKey = user ? `sidebar_collapsed_${user.username}` : 'sidebar_collapsed';
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(collapseKey) === 'true');
-  const [categories, setCategories] = useState([]);
-
-  useEffect(() => {
-    projectCategoryApi.getAll()
-      .then(res => setCategories(res.data || []))
-      .catch(() => {});
-  }, [location.pathname]);
+  const { data: categoriesRaw = [] } = useCategories();
+  const categories = [...categoriesRaw].sort((a, b) => a.stepOrder - b.stepOrder);
 
   const inSettings = SETTINGS_ROUTES.includes(location.pathname);
 

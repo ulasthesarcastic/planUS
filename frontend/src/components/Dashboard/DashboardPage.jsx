@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { projectApi, projectCategoryApi } from '../../services/api';
+import { useProjects, useCategories } from '../../hooks/useQueries';
 import { toSlug } from '../Sidebar';
 
 function fmt(v) {
@@ -10,19 +9,10 @@ function fmt(v) {
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const [categories, setCategories] = useState([]);
-  const [projects, setProjects] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    Promise.all([projectCategoryApi.getAll(), projectApi.getAll()])
-      .then(([catRes, projRes]) => {
-        setCategories([...(catRes.data || [])].sort((a, b) => a.stepOrder - b.stepOrder));
-        setProjects(projRes.data || []);
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+  const { data: categoriesRaw = [], isLoading: catsLoading } = useCategories();
+  const { data: projects = [], isLoading: projsLoading } = useProjects();
+  const categories = [...categoriesRaw].sort((a, b) => a.stepOrder - b.stepOrder);
+  const loading = catsLoading || projsLoading;
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: 'var(--text-muted)', fontSize: 14 }}>
