@@ -79,7 +79,7 @@ export default function Sidebar() {
     <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>
       {/* Logo area */}
       <div className="sidebar-logo" style={{ paddingBottom: 16, borderBottom: '1px solid var(--border)', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between', gap: 8 }}>
-        <Link to="/projects" style={{ display: 'block', overflow: 'hidden', flex: 1, minWidth: 0 }}>
+        <Link to="/" style={{ display: 'block', overflow: 'hidden', flex: 1, minWidth: 0 }}>
           {collapsed ? (
             <div style={{ display: 'flex', justifyContent: 'center' }}>
               <img src={logoIcon} alt="planUS" style={{ width: 32, height: 32, filter: 'brightness(0) invert(1)' }} />
@@ -95,7 +95,7 @@ export default function Sidebar() {
         {inSettings ? (
           <div className="sidebar-section">
             <button
-              onClick={() => navigate(categories.length > 0 ? `/category/${categories[0].id}` : '/projects')}
+              onClick={() => navigate('/')}
               style={{
                 display: 'flex', alignItems: 'center', gap: 8, justifyContent: collapsed ? 'center' : 'flex-start',
                 width: '100%', padding: collapsed ? '7px' : '7px 10px', marginBottom: 6,
