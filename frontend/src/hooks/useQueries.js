@@ -7,6 +7,7 @@ import {
 
 // ── Query Keys ────────────────────────────────────────────────────────────────
 export const QK = {
+  workflowSteps:  ['workflowSteps'],
   projects:       ['projects'],
   project:        (id) => ['projects', id],
   categories:     ['categories'],
@@ -26,6 +27,23 @@ const STATIC_OPTIONS  = { staleTime: 5 * 60 * 1000 };   // 5 dk
 const DYNAMIC_OPTIONS = { staleTime: 60 * 1000 };        // 1 dk
 
 // ── Hooks ─────────────────────────────────────────────────────────────────────
+
+// Tüm kategorilerin workflow step'lerini tek sorguda çeker
+export function useAllWorkflowSteps(categories) {
+  return useQuery({
+    queryKey: QK.workflowSteps,
+    queryFn: async () => {
+      const arrays = await Promise.all(
+        (categories || []).map(c =>
+          projectCategoryApi.getWorkflow(c.id).then(r => r.data).catch(() => [])
+        )
+      );
+      return arrays.flat();
+    },
+    enabled: Array.isArray(categories) && categories.length > 0,
+    ...STATIC_OPTIONS,
+  });
+}
 
 export function useProjects() {
   return useQuery({

@@ -1,7 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
-import { projectApi, personnelApi, productApi, organizationApi, seniorityApi, potentialSaleApi, projectTypeApi, projectCategoryApi } from '../../services/api';
+import { projectApi, organizationApi, projectCategoryApi } from '../../services/api';
+import {
+  useProjects, usePersonnel, useProducts, useOrganization,
+  useSeniorities, usePotentialSales, useProjectTypes, useCategories,
+  useAllWorkflowSteps, useInvalidate,
+} from '../../hooks/useQueries';
 import SearchableSelect from '../SearchableSelect';
 
 const MONTHS = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran',
@@ -1733,16 +1738,18 @@ export default function ProjectsPage({ categoryId: propCategoryId }) {
   const { user } = useAuth();
   const filterKey = user ? `projects_filter_${user.username}` : 'projects_filter';
 
-  const [projects, setProjects] = useState([]);
-  const [personnel, setPersonnel] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [units, setUnits] = useState([]);
-  const [seniorities, setSeniorities] = useState([]);
-  const [potentialSalesAll, setPotentialSalesAll] = useState([]);
-  const [projectTypes, setProjectTypes] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [allSteps, setAllSteps] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data: projects = [], isLoading: projLoading, refetch: refetchProjects } = useProjects();
+  const { data: personnel = [] }       = usePersonnel();
+  const { data: products = [] }        = useProducts();
+  const { data: units = [] }           = useOrganization();
+  const { data: seniorities = [] }     = useSeniorities();
+  const { data: potentialSalesAll = [] } = usePotentialSales();
+  const { data: projectTypes = [] }    = useProjectTypes();
+  const { data: categoriesRaw = [] }   = useCategories();
+  const categories = [...categoriesRaw].sort((a, b) => a.stepOrder - b.stepOrder);
+  const { data: allSteps = [] }        = useAllWorkflowSteps(categories);
+  const invalidate                     = useInvalidate();
+  const loading = projLoading;
   const [selectedProject, setSelectedProject] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -1776,33 +1783,11 @@ export default function ProjectsPage({ categoryId: propCategoryId }) {
   const categoryMap  = Object.fromEntries(categories.map(c => [String(c.id), c]));
   const stepMap      = Object.fromEntries(allSteps.map(s => [String(s.id), s]));
 
-  const load = async () => {
-    const [pRes, perRes, prRes, uRes, sRes, psRes] = await Promise.all([
-      projectApi.getAll(), personnelApi.getAll(), productApi.getAll(), organizationApi.getAll(), seniorityApi.getAll(), potentialSaleApi.getAll(),
-    ]);
-    setProjects(pRes.data);
-    setPersonnel(perRes.data);
-    setProducts(prRes.data);
-    setUnits(uRes.data);
-    setSeniorities(sRes.data);
-    setPotentialSalesAll(psRes.data);
-    projectTypeApi.getAll().then(ptRes => setProjectTypes(ptRes.data)).catch(() => {});
-    projectCategoryApi.getAll().then(async cRes => {
-      const cats = cRes.data || [];
-      setCategories(cats);
-      const stepArrays = await Promise.all(cats.map(c => projectCategoryApi.getWorkflow(c.id).then(r => r.data).catch(() => [])));
-      setAllSteps(stepArrays.flat());
-    }).catch(() => {});
-    setLoading(false);
-  };
 
-  useEffect(() => { load(); }, []);
-
-  // Seçili projeyi backend'den taze çeker
+  // Seçili projeyi cache'i geçersiz kılıp taze çeker
   const refreshSelected = async () => {
-    const res = await projectApi.getAll();
-    setProjects(res.data);
-    if (selectedProject) {
+    const res = await refetchProjects();
+    if (selectedProject && res.data) {
       const fresh = res.data.find(p => p.id === selectedProject.id);
       if (fresh) setSelectedProject(fresh);
     }
@@ -1817,7 +1802,7 @@ export default function ProjectsPage({ categoryId: propCategoryId }) {
     await projectApi.delete(id);
     setDeleteConfirm(null);
     setSelectedProject(null);
-    load();
+    invalidate.projects();
   };
 
   const handleMoveToPotensiyal = async (project) => {
@@ -1827,7 +1812,7 @@ export default function ProjectsPage({ categoryId: propCategoryId }) {
     );
     await Promise.all(linked.map(s => potentialSaleApi.delete(s.id)));
     await projectApi.update(project.id, { ...project, projectStatus: 'POTANSIYEL' });
-    load();
+    invalidate.projects();
   };
 
   if (selectedProject) {
@@ -1967,7 +1952,7 @@ export default function ProjectsPage({ categoryId: propCategoryId }) {
       {modalOpen && (
         <ProjectModal project={editing} personnel={personnel} projectTypes={projectTypes} categories={categories}
           lockedCategoryId={!editing ? propCategoryId : undefined}
-          onSave={() => { setModalOpen(false); load(); if (selectedProject) refreshSelected(); }}
+          onSave={() => { setModalOpen(false); invalidate.projects(); if (selectedProject) refreshSelected(); }}
           onClose={() => setModalOpen(false)} />
       )}
 
