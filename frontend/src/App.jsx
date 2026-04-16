@@ -15,7 +15,6 @@ import ResourcePlanningPage from './components/ResourcePlanning/ResourcePlanning
 import PnLPage from './components/PnL/PnLPage';
 import ProjectTypesPage from './components/ProjectTypes/ProjectTypesPage';
 import ProjectCategoriesPage from './components/ProjectCategories/ProjectCategoriesPage';
-import PortfolioPage from './components/Portfolio/PortfolioPage';
 import './styles/global.css';
 
 function UserIcon() {
@@ -213,7 +212,7 @@ function AppContent() {
         <TopBar user={user} logout={logout} theme={theme} toggleTheme={toggleTheme} />
         <main className="main-content">
           <Routes>
-            <Route path="/" element={<PortfolioPage />} />
+            <Route path="/" element={<Navigate to="/projects" replace />} />
             <Route path="/projects" element={<ProjectsPage />} />
             <Route path="/category/:categoryId" element={<CategoryProjectsPage />} />
             <Route path="/products" element={<ProductsPage />} />
