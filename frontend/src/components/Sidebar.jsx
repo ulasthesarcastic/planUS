@@ -2,6 +2,19 @@ import { NavLink, useLocation, useNavigate, Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { projectCategoryApi } from '../services/api';
+
+export function toSlug(name) {
+  return name
+    .toLowerCase()
+    .replace(/ı/g, 'i').replace(/İ/g, 'i')
+    .replace(/ş/g, 's').replace(/Ş/g, 's')
+    .replace(/ğ/g, 'g').replace(/Ğ/g, 'g')
+    .replace(/ü/g, 'u').replace(/Ü/g, 'u')
+    .replace(/ö/g, 'o').replace(/Ö/g, 'o')
+    .replace(/ç/g, 'c').replace(/Ç/g, 'c')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
 import logo from '../assets/logo.png';
 import logoIcon from '../assets/logo-icon.png';
 
@@ -95,7 +108,7 @@ export default function Sidebar() {
         {inSettings ? (
           <div className="sidebar-section">
             <button
-              onClick={() => navigate(categories.length > 0 ? `/category/${categories[0].id}` : '/projects')}
+              onClick={() => navigate(categories.length > 0 ? `/category/${toSlug(categories[0].name)}` : '/projects')}
               style={{
                 display: 'flex', alignItems: 'center', gap: 8, justifyContent: collapsed ? 'center' : 'flex-start',
                 width: '100%', padding: collapsed ? '7px' : '7px 10px', marginBottom: 6,
@@ -139,7 +152,7 @@ export default function Sidebar() {
                 return (
                   <NavLink
                     key={cat.id}
-                    to={`/category/${cat.id}`}
+                    to={`/category/${toSlug(cat.name)}`}
                     className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
                     title={menuLabel}
                     style={cat.color ? { '--cat-color': cat.color } : {}}

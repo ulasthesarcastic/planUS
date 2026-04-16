@@ -15,6 +15,8 @@ import ResourcePlanningPage from './components/ResourcePlanning/ResourcePlanning
 import PnLPage from './components/PnL/PnLPage';
 import ProjectTypesPage from './components/ProjectTypes/ProjectTypesPage';
 import ProjectCategoriesPage from './components/ProjectCategories/ProjectCategoriesPage';
+import { toSlug } from './components/Sidebar';
+import { projectCategoryApi } from './services/api';
 import './styles/global.css';
 
 function UserIcon() {
@@ -169,7 +171,18 @@ function TopBar({ user, logout, theme, toggleTheme }) {
 }
 
 function CategoryProjectsPage() {
-  const { categoryId } = useParams();
+  const { categorySlug } = useParams();
+  const [categoryId, setCategoryId] = useState(null);
+
+  useEffect(() => {
+    projectCategoryApi.getAll().then(res => {
+      const cats = res.data || [];
+      const match = cats.find(c => toSlug(c.name) === categorySlug);
+      if (match) setCategoryId(match.id);
+    });
+  }, [categorySlug]);
+
+  if (!categoryId) return null;
   return <ProjectsPage categoryId={categoryId} />;
 }
 
@@ -214,7 +227,7 @@ function AppContent() {
           <Routes>
             <Route path="/" element={<Navigate to="/projects" replace />} />
             <Route path="/projects" element={<ProjectsPage />} />
-            <Route path="/category/:categoryId" element={<CategoryProjectsPage />} />
+            <Route path="/category/:categorySlug" element={<CategoryProjectsPage />} />
             <Route path="/products" element={<ProductsPage />} />
             <Route path="/seniorities" element={<SenioritiesPage />} />
             <Route path="/personnel" element={<PersonnelPage />} />
