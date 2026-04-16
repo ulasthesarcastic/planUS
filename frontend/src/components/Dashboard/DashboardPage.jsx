@@ -81,30 +81,20 @@ export default function DashboardPage() {
                 </span>
               </div>
 
-              {catProjects.length > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {totalBudget > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                      <span style={{ color: 'var(--text-muted)' }}>Toplam Bütçe</span>
-                      <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: 600, color: '#34d399' }}>{fmt(totalBudget)} ₺</span>
-                    </div>
-                  )}
-                  {remainingBudget > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                      <span style={{ color: 'var(--text-muted)' }}>Kalan Bütçe</span>
-                      <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: 600, color: '#f97316' }}>{fmt(remainingBudget)} ₺</span>
-                    </div>
-                  )}
-                  {potentialBudget > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                      <span style={{ color: 'var(--text-muted)' }}>Potansiyel</span>
-                      <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: 600, color: '#a78bfa' }}>{fmt(potentialBudget)} ₺</span>
-                    </div>
-                  )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Toplam Bütçe</span>
+                  <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: 500, color: 'var(--text-secondary)' }}>{fmt(totalBudget) ?? '0'} ₺</span>
                 </div>
-              ) : (
-                <div style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>Henüz proje yok</div>
-              )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Kalan Bütçe</span>
+                  <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: 500, color: 'var(--text-secondary)' }}>{fmt(remainingBudget) ?? '0'} ₺</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Potansiyel</span>
+                  <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: 500, color: 'var(--text-secondary)' }}>{fmt(potentialBudget) ?? '0'} ₺</span>
+                </div>
+              </div>
             </div>
           );
         })}
