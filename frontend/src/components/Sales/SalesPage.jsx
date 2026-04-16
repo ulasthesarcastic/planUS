@@ -33,11 +33,11 @@ const applyShift = (entries, offset, newEndMonth, newEndYear) => {
 const buildShiftInfo = (entries, oldSM, oldSY, newSM, newSY, newEM, newEY) => {
   if (!entries || entries.length === 0) return null;
   const offset = (newSY * 12 + newSM) - (oldSY * 12 + oldSM);
-  if (offset === 0) return null;
   const endTotal = newEY * 12 + newEM;
   const shifted = entries.map(e => { const { month, year } = addMonths(e.month, e.year, offset); return { ...e, month, year }; });
   const dropped = shifted.filter(e => (e.year * 12 + e.month) > endTotal);
   const droppedMonths = [...new Set(dropped.map(e => `${MONTHS[e.month - 1]} ${e.year}`))];
+  if (offset === 0 && dropped.length === 0) return null;
   return { offset, dropped: dropped.length, droppedMonths };
 };
 
@@ -150,14 +150,16 @@ function PotentialProjectModal({ project, personnel, onSave, onClose }) {
             <div className="modal-title">Kaynak Planlaması Etkilenecek</div>
             <button className="btn-icon" onClick={() => setShiftConfirm(null)}><XIcon /></button>
           </div>
-          <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 12 }}>
-            Proje başlangıcı <strong>{abs} ay {dir}</strong> kaydırıldı.
-            Bu projedeki tüm kaynak planlaması da aynı oranda ötelenecek.
-          </p>
+          {info.offset !== 0 && (
+            <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 12 }}>
+              Proje başlangıcı <strong>{abs} ay {dir}</strong> kaydırıldı.
+              Bu projedeki tüm kaynak planlaması da aynı oranda ötelenecek.
+            </p>
+          )}
           {info.dropped > 0 && (
             <div style={{ padding: '10px 14px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 8, marginBottom: 12 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: '#f87171', marginBottom: 4 }}>
-                {info.dropped} kayıt proje süresi dışına çıkacak ve silinecek:
+                {info.dropped} kayıt yeni proje süresi dışında kalacak ve silinecek:
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{info.droppedMonths.join(', ')}</div>
             </div>
