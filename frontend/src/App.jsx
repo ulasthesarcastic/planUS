@@ -214,6 +214,7 @@ function AppContent() {
         <main className="main-content">
           <Routes>
             <Route path="/" element={<PortfolioPage />} />
+            <Route path="/projects" element={<ProjectsPage />} />
             <Route path="/category/:categoryId" element={<CategoryProjectsPage />} />
             <Route path="/products" element={<ProductsPage />} />
             <Route path="/seniorities" element={<SenioritiesPage />} />
