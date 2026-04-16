@@ -17,6 +17,7 @@ import ProjectTypesPage from './components/ProjectTypes/ProjectTypesPage';
 import ProjectCategoriesPage from './components/ProjectCategories/ProjectCategoriesPage';
 import { toSlug } from './components/Sidebar';
 import { projectCategoryApi } from './services/api';
+import DashboardPage from './components/Dashboard/DashboardPage';
 import './styles/global.css';
 
 function UserIcon() {
@@ -225,7 +226,7 @@ function AppContent() {
         <TopBar user={user} logout={logout} theme={theme} toggleTheme={toggleTheme} />
         <main className="main-content">
           <Routes>
-            <Route path="/" element={<Navigate to="/projects" replace />} />
+            <Route path="/" element={<DashboardPage />} />
             <Route path="/projects" element={<ProjectsPage />} />
             <Route path="/category/:categorySlug" element={<CategoryProjectsPage />} />
             <Route path="/products" element={<ProductsPage />} />

@@ -92,7 +92,7 @@ export default function Sidebar() {
     <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>
       {/* Logo area */}
       <div className="sidebar-logo" style={{ paddingBottom: 16, borderBottom: '1px solid var(--border)', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between', gap: 8 }}>
-        <Link to="/projects" style={{ display: 'block', overflow: 'hidden', flex: 1, minWidth: 0 }}>
+        <Link to="/" style={{ display: 'block', overflow: 'hidden', flex: 1, minWidth: 0 }}>
           {collapsed ? (
             <div style={{ display: 'flex', justifyContent: 'center' }}>
               <img src={logoIcon} alt="planUS" style={{ width: 32, height: 32, filter: 'brightness(0) invert(1)' }} />
@@ -143,6 +143,12 @@ export default function Sidebar() {
           </div>
         ) : (
           <>
+            {/* Dashboard */}
+            <div className="sidebar-section">
+              <NavLink to="/" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Dashboard">
+                <Icons.Grid />{!collapsed && <span className="nav-item-label">Dashboard</span>}
+              </NavLink>
+            </div>
             {/* Portföy Yönetimi bölümü */}
             <div className="sidebar-section">
               {!collapsed && <div className="sidebar-section-label">Portföy Yönetimi</div>}
