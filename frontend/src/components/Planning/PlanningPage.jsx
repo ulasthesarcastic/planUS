@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
-import { projectApi, personnelApi, organizationApi, seniorityApi, potentialSaleApi } from '../../services/api';
+import { projectApi } from '../../services/api';
+import { useProjects, usePersonnel, useOrganization, useSeniorities, usePotentialSales, useInvalidate } from '../../hooks/useQueries';
 import SearchableSelect from '../SearchableSelect';
 import {
   Box, Typography, Tabs, Tab, Chip, Button, IconButton,
@@ -822,12 +823,13 @@ function ProjectSelectionScreen({ projects, personnel, personnelMap, seniorityMa
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function PlanningPage() {
-  const [projects,    setProjects]    = useState([]);
-  const [personnel,   setPersonnel]   = useState([]);
-  const [units,       setUnits]       = useState([]);
-  const [seniorities, setSeniorities] = useState([]);
-  const [potentialSalesAll, setPotentialSalesAll] = useState([]);
-  const [loading,     setLoading]     = useState(true);
+  const { data: projects = [],         isLoading: projLoading, refetch: refetchProjects } = useProjects();
+  const { data: personnel = [] }       = usePersonnel();
+  const { data: units = [] }           = useOrganization();
+  const { data: seniorities = [] }     = useSeniorities();
+  const { data: potentialSalesAll = [] } = usePotentialSales();
+  const invalidate = useInvalidate();
+  const loading = projLoading;
   const [selectedProject, setSelectedProject] = useState(null);
   const [typeFilter, setTypeFilter] = useState('MUSTERILI');
 
@@ -843,29 +845,14 @@ export default function PlanningPage() {
   const personnelMap = Object.fromEntries(personnel.map(p => [String(p.id), p]));
   const seniorityMap = Object.fromEntries(seniorities.map(s => [String(s.id), s]));
 
-  const load = async () => {
-    const [pRes, perRes, uRes, sRes, psRes] = await Promise.all([
-      projectApi.getAll(), personnelApi.getAll(), organizationApi.getAll(), seniorityApi.getAll(), potentialSaleApi.getAll(),
-    ]);
-    setProjects(pRes.data);
-    setPersonnel(perRes.data);
-    setUnits(uRes.data);
-    setSeniorities(sRes.data);
-    setPotentialSalesAll(psRes.data);
-    setLoading(false);
-  };
-
   const handleReload = async () => {
-    const pRes = await projectApi.getAll();
-    setProjects(pRes.data);
+    const res = await refetchProjects();
     const sid = selectedIdRef.current;
-    if (sid) {
-      const fresh = pRes.data.find(p => p.id === sid);
+    if (sid && res.data) {
+      const fresh = res.data.find(p => p.id === sid);
       if (fresh) setSelectedProject(fresh);
     }
   };
-
-  useEffect(() => { load(); }, []);
 
   if (loading) return (
     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', p: 8 }}>
