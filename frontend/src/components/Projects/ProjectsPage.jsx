@@ -752,9 +752,8 @@ function MonthYearSelect({ month, year, onMonthChange, onYearChange, allowEmpty 
 }
 
 // ── PROJE FORMU MODALI ──────────────────────────────────────────
-function ProjectModal({ project, personnel, projectTypes = [], categories = [], lockedCategoryId, onSave, onClose }) {
+function ProjectModal({ project, personnel, projectTypes = [], categories = [], units = [], lockedCategoryId, onSave, onClose }) {
   const isEdit = !!project;
-  const [units, setUnits] = useState([]);
   const [workflowSteps, setWorkflowSteps] = useState([]);
   const [form, setForm] = useState(project ? {
     name: project.name, customerName: project.customerName || '',
@@ -782,11 +781,6 @@ function ProjectModal({ project, personnel, projectTypes = [], categories = [], 
   const [dateWarnCount, setDateWarnCount] = useState(0);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  useEffect(() => {
-    import('../../services/api').then(({ organizationApi }) => {
-      organizationApi.getAll().then(res => setUnits(res.data));
-    });
-  }, []);
 
   // Load workflow steps when category changes
   useEffect(() => {
@@ -1829,7 +1823,7 @@ export default function ProjectsPage({ categoryId: propCategoryId }) {
           onUpdate={refreshSelected}
         />
         {modalOpen && (
-          <ProjectModal project={editing} personnel={personnel} projectTypes={projectTypes} categories={categories}
+          <ProjectModal project={editing} personnel={personnel} projectTypes={projectTypes} categories={categories} units={units}
             onSave={() => { setModalOpen(false); refreshSelected(); }}
             onClose={() => setModalOpen(false)} />
         )}

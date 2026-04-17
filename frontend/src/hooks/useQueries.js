@@ -132,12 +132,13 @@ export function usePotentialSalesByProject(projectId) {
 export function useInvalidate() {
   const qc = useQueryClient();
   return {
-    projects:    () => qc.invalidateQueries({ queryKey: QK.projects }),
-    project:     (id) => qc.invalidateQueries({ queryKey: QK.project(id) }),
-    categories:  () => qc.invalidateQueries({ queryKey: QK.categories }),
-    personnel:   () => qc.invalidateQueries({ queryKey: QK.personnel }),
-    products:    () => qc.invalidateQueries({ queryKey: QK.products }),
+    projects:     () => qc.invalidateQueries({ queryKey: QK.projects }),
+    project:      (id) => qc.invalidateQueries({ queryKey: QK.project(id) }),
+    categories:   () => qc.invalidateQueries({ queryKey: QK.categories }),
+    projectTypes: () => qc.invalidateQueries({ queryKey: QK.projectTypes }),
+    personnel:    () => qc.invalidateQueries({ queryKey: QK.personnel }),
+    products:     () => qc.invalidateQueries({ queryKey: QK.products }),
     potentialSales: () => qc.invalidateQueries({ queryKey: QK.potentialSales }),
-    all:         () => qc.invalidateQueries(),
+    all:          () => qc.invalidateQueries(),
   };
 }

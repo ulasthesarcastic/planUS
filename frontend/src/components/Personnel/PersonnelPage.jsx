@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { personnelApi, seniorityApi, organizationApi } from '../../services/api';
+import { personnelApi } from '../../services/api';
 import SearchableSelect from '../SearchableSelect';
+import { usePersonnel, useSeniorities, useOrganization, useInvalidate } from '../../hooks/useQueries';
 
 function XIcon() { return <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>; }
 function EditIcon() { return <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>; }
@@ -132,10 +133,11 @@ function PersonnelModal({ personnel, seniorities, units, onSave, onClose }) {
 }
 
 export default function PersonnelPage() {
-  const [personnel, setPersonnel] = useState([]);
-  const [seniorities, setSeniorities] = useState([]);
-  const [units, setUnits] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data: personnel = [], isLoading: loading } = usePersonnel();
+  const { data: seniorities = [] } = useSeniorities();
+  const { data: units = [] } = useOrganization();
+  const invalidate = useInvalidate();
+
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -143,14 +145,6 @@ export default function PersonnelPage() {
   const [sortDir, setSortDir] = useState('asc');
   const [filterRoot, setFilterRoot] = useState('ALL');
   const [filterChild, setFilterChild] = useState('ALL');
-
-  const load = async () => {
-    try {
-      const [pRes, sRes, uRes] = await Promise.all([personnelApi.getAll(), seniorityApi.getAll(), organizationApi.getAll()]);
-      setPersonnel(pRes.data); setSeniorities(sRes.data); setUnits(uRes.data);
-    } finally { setLoading(false); }
-  };
-  useEffect(() => { load(); }, []);
 
   const roots = units.filter(u => !u.parentId);
   const getChildren = (rootId) => units.filter(u => String(u.parentId) === String(rootId));
@@ -162,7 +156,7 @@ export default function PersonnelPage() {
     return unit.parentId ? String(unit.parentId) : String(unit.id);
   };
 
-  const handleDelete = async (id) => { await personnelApi.delete(id); setDeleteConfirm(null); load(); };
+  const handleDelete = async (id) => { await personnelApi.delete(id); setDeleteConfirm(null); invalidate.personnel(); };
 
   const handleSort = (col) => {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -263,7 +257,7 @@ export default function PersonnelPage() {
 
       {modalOpen && (
         <PersonnelModal personnel={editing} seniorities={seniorities} units={units}
-          onSave={() => { setModalOpen(false); load(); }}
+          onSave={() => { setModalOpen(false); invalidate.personnel(); }}
           onClose={() => setModalOpen(false)} />
       )}
 

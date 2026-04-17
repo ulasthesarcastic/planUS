@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
-import { projectApi, personnelApi, seniorityApi, organizationApi, projectTypeApi } from '../../services/api';
+import { useState, useMemo } from 'react';
 import SearchableSelect from '../SearchableSelect';
+import { useProjects, usePersonnel, useSeniorities, useOrganization, useProjectTypes } from '../../hooks/useQueries';
 
 const MONTHS_SHORT = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
 const MONTHS_FULL  = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
@@ -177,11 +177,13 @@ export default function BudgetPage() {
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth() + 1;
 
-  const [projects,       setProjects]       = useState([]);
-  const [personnelList,  setPersonnelList]  = useState([]);
-  const [seniorities,    setSeniorities]    = useState([]);
-  const [orgUnits,       setOrgUnits]       = useState([]);
-  const [loading,        setLoading]        = useState(true);
+  const { data: projects = [], isLoading: loadingProjects } = useProjects();
+  const { data: personnelList = [] } = usePersonnel();
+  const { data: seniorities = [] } = useSeniorities();
+  const { data: orgUnits = [] } = useOrganization();
+  const { data: projectTypes = [] } = useProjectTypes();
+  const loading = loadingProjects;
+
   const [selectedYear,   setSelectedYear]   = useState(currentYear);
   const [selectedProjectId, setSelectedProjectId] = useState('all');
   const [chartType,      setChartType]      = useState('bar');
@@ -193,19 +195,6 @@ export default function BudgetPage() {
   const [collapsedGroups, setCollapsedGroups] = useState(new Set());
   const [sortCol, setSortCol] = useState(null);   // 'name'|'plannedCost'|'remainingBudget'|'potentialSales'|'totalAvailable'|'diff'
   const [sortDir, setSortDir] = useState('asc');  // 'asc'|'desc'
-  const [projectTypes, setProjectTypes] = useState([]);
-
-  useEffect(() => {
-    Promise.all([projectApi.getAll(), personnelApi.getAll(), seniorityApi.getAll(), organizationApi.getAll()])
-      .then(([pRes, perRes, sRes, orgRes]) => {
-        setProjects(pRes.data);
-        setPersonnelList(perRes.data);
-        setSeniorities(sRes.data);
-        setOrgUnits(orgRes.data);
-      })
-      .finally(() => setLoading(false));
-    projectTypeApi.getAll().then(r => setProjectTypes(r.data)).catch(() => {});
-  }, []);
 
   const personnelMap   = useMemo(() => Object.fromEntries(personnelList.map(p => [p.id, p])), [personnelList]);
   const seniorityMap   = useMemo(() => Object.fromEntries(seniorities.map(s => [s.id, s])),   [seniorities]);

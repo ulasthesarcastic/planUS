@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { projectCategoryApi } from '../../services/api';
+import { useCategories, useInvalidate } from '../../hooks/useQueries';
 
 // ─── Icons ──────────────────────────────────────────────────────────
 function PlusIcon()  { return <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>; }
@@ -374,8 +375,9 @@ const CAT_ICONS = {
 
 // ─── Main Categories Page ────────────────────────────────────────────
 export default function ProjectCategoriesPage() {
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data: categories = [], isLoading: loading } = useCategories();
+  const invalidate = useInvalidate();
+
   const [editingCat, setEditingCat] = useState(null);
   const [deleteCatId, setDeleteCatId] = useState(null);
   const [workflowCat, setWorkflowCat] = useState(null);
@@ -384,13 +386,6 @@ export default function ProjectCategoriesPage() {
   const [error, setError] = useState('');
   const [dragOverIdx, setDragOverIdx] = useState(null);
   const dragFromIdx = useRef(null);
-
-  const load = async () => {
-    try { const r = await projectCategoryApi.getAll(); setCategories(r.data || []); }
-    catch { setCategories([]); }
-    setLoading(false);
-  };
-  useEffect(() => { load(); }, []);
 
   const openNew  = () => { setForm({ name: '', color: PALETTE[0], icon: 'folder', sectionLabel: '', menuLabel: '' }); setError(''); setEditingCat('new'); };
   const openEdit = (cat) => { setForm({ name: cat.name, color: cat.color || PALETTE[0], icon: cat.icon || 'folder', sectionLabel: cat.sectionLabel || '', menuLabel: cat.menuLabel || '' }); setError(''); setEditingCat(cat); };
@@ -403,13 +398,13 @@ export default function ProjectCategoriesPage() {
       const payload = { name: form.name.trim(), color: form.color, icon: form.icon, sectionLabel: form.sectionLabel.trim() || null, menuLabel: form.menuLabel.trim() || null };
       if (editingCat === 'new') await projectCategoryApi.create(payload);
       else await projectCategoryApi.update(editingCat.id, { ...payload, stepOrder: editingCat.stepOrder });
-      closeForm(); load();
+      closeForm(); invalidate.categories();
     } catch (e) { setError(e.response?.data?.error || 'Bir hata oluştu.'); }
     finally { setSaving(false); }
   };
 
   const confirmDelete = async () => {
-    try { await projectCategoryApi.delete(deleteCatId); setDeleteCatId(null); load(); }
+    try { await projectCategoryApi.delete(deleteCatId); setDeleteCatId(null); invalidate.categories(); }
     catch (e) { setError(e.response?.data?.error || 'Silinemedi.'); setDeleteCatId(null); }
   };
 
@@ -423,7 +418,7 @@ export default function ProjectCategoriesPage() {
       projectCategoryApi.update(a.id, { ...a, stepOrder: b.stepOrder }),
       projectCategoryApi.update(b.id, { ...b, stepOrder: a.stepOrder }),
     ]);
-    load();
+    invalidate.categories();
   };
 
   const handleDragStart = (e, index) => {
@@ -447,15 +442,14 @@ export default function ProjectCategoriesPage() {
     const newOrder = [...categories];
     const [moved] = newOrder.splice(fromIndex, 1);
     newOrder.splice(toIndex, 0, moved);
-    // Optimistic update
+    // Assign new stepOrder values
     const updated = newOrder.map((cat, i) => ({ ...cat, stepOrder: i + 1 }));
-    setCategories(updated);
     // Persist only changed items
     const updates = updated
-      .filter((cat, i) => categories.find(c => c.id === cat.id)?.stepOrder !== cat.stepOrder)
+      .filter((cat) => categories.find(c => c.id === cat.id)?.stepOrder !== cat.stepOrder)
       .map(cat => projectCategoryApi.update(cat.id, cat));
     await Promise.all(updates);
-    load();
+    invalidate.categories();
   };
 
   if (workflowCat) {

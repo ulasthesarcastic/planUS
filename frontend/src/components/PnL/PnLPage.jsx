@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { projectApi, personnelApi, seniorityApi, potentialSaleApi, projectTypeApi, organizationApi } from '../../services/api';
 import { useAuth } from '../../auth/AuthContext';
+import { useProjects, usePersonnel, useSeniorities, usePotentialSales, useProjectTypes, useOrganization } from '../../hooks/useQueries';
 
 // ── Sabitler & Yardımcılar ────────────────────────────────────────────────────
 
@@ -589,33 +589,15 @@ export default function PnLPage() {
   const { user } = useAuth();
   const filterKey = user ? `pnl_filter_${user.username}` : 'pnl_filter';
 
-  const [projects, setProjects]       = useState([]);
-  const [personnel, setPersonnel]     = useState([]);
-  const [seniorities, setSeniorities] = useState([]);
-  const [potSales, setPotSales]       = useState([]);
-  const [projectTypes, setProjectTypes] = useState([]);
-  const [units, setUnits]             = useState([]);
-  const [loading, setLoading]         = useState(true);
-  const [selected, setSelected]       = useState(null);
-  const [typeFilter, setTypeFilter]   = useState(() => localStorage.getItem(filterKey) || 'ALL');
+  const { data: projects = [] }     = useProjects();
+  const { data: personnel = [] }    = usePersonnel();
+  const { data: seniorities = [] }  = useSeniorities();
+  const { data: potSales = [] }     = usePotentialSales();
+  const { data: projectTypes = [] } = useProjectTypes();
+  const { data: units = [] }        = useOrganization();
 
-  useEffect(() => {
-    Promise.all([
-      projectApi.getAll(),
-      personnelApi.getAll(),
-      seniorityApi.getAll(),
-      potentialSaleApi.getAll(),
-      organizationApi.getAll(),
-    ]).then(([pj, pe, se, ps, org]) => {
-      setProjects(pj.data);
-      setPersonnel(pe.data);
-      setSeniorities(se.data);
-      setPotSales(ps.data);
-      setUnits(org.data);
-      setLoading(false);
-    });
-    projectTypeApi.getAll().then(r => setProjectTypes(r.data)).catch(() => {});
-  }, []);
+  const [selected, setSelected]     = useState(null);
+  const [typeFilter, setTypeFilter] = useState(() => localStorage.getItem(filterKey) || 'ALL');
 
   const personnelMap = useMemo(() => Object.fromEntries(personnel.map(p => [p.id, p])), [personnel]);
   const seniorityMap = useMemo(() => Object.fromEntries(seniorities.map(s => [s.id, s])), [seniorities]);
@@ -645,8 +627,6 @@ export default function PnLPage() {
 
   const selectedTypeName = projectTypes.find(t => t.id === typeFilter)?.name || 'Tümü';
   const isMusterili = selectedTypeName.toLowerCase() === 'müşterili';
-
-  if (loading) return <div className="loading">Yükleniyor...</div>;
 
   if (selected) {
     const linkedSiparisler = siparisler.filter(s => s.projectId && String(s.projectId) === String(selected.id));
