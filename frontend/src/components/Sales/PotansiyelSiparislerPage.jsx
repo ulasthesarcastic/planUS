@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
-import { potentialSaleApi, projectApi, projectCategoryApi } from '../../services/api';
+import { useState } from 'react';
+import { potentialSaleApi } from '../../services/api';
+import { usePotentialSales, useProjects, useCategories, useInvalidate } from '../../hooks/useQueries';
 import SearchableSelect from '../SearchableSelect';
 
 const MONTHS = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
@@ -252,27 +253,15 @@ function OrderCard({ s, projectName, categoryName, categoryColor, onEdit, onDele
 }
 
 export default function PotansiyelSiparislerPage() {
-  const [sales, setSales] = useState([]);
-  const [projects, setProjects] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data: sales = [], isLoading: loading } = usePotentialSales();
+  const { data: projects = [] }                   = useProjects();
+  const { data: categoriesRaw = [] }              = useCategories();
+  const categories = categoriesRaw;
+  const invalidate = useInvalidate();
+
   const [editing, setEditing] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [statusFilter, setStatusFilter] = useState('ALL');
-
-  const load = async () => {
-    const [sRes, pRes, cRes] = await Promise.all([
-      potentialSaleApi.getAll(),
-      projectApi.getAll(),
-      projectCategoryApi.getAll(),
-    ]);
-    setSales(sRes.data);
-    setProjects(pRes.data);
-    setCategories(cRes.data);
-    setLoading(false);
-  };
-
-  useEffect(() => { load(); }, []);
 
   // Build maps for lookups
   const projectMap = Object.fromEntries(projects.map(p => [String(p.id), p]));
@@ -306,7 +295,7 @@ export default function PotansiyelSiparislerPage() {
   const handleDelete = async (s) => {
     await potentialSaleApi.delete(s.id);
     setDeleteConfirm(null);
-    load();
+    invalidate.potentialSales();
   };
 
   if (loading) return <div className="loading">Yükleniyor...</div>;
@@ -378,7 +367,7 @@ export default function PotansiyelSiparislerPage() {
         <SaleModal
           sale={editing?.id ? editing : null}
           projects={projects}
-          onSave={() => { setEditing(null); load(); }}
+          onSave={() => { setEditing(null); invalidate.potentialSales(); }}
           onClose={() => setEditing(null)}
         />
       )}

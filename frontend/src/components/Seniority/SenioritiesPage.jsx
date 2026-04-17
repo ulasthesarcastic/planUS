@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { seniorityApi } from '../../services/api';
+import { useSeniorities, useInvalidate } from '../../hooks/useQueries';
 
 const MONTHS = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
 const CURRENCIES = ['TL', 'USD', 'EUR', 'GBP', 'CHF'];
@@ -185,21 +186,17 @@ function formatPeriod(rate) {
 }
 
 export default function SenioritiesPage() {
-  const [seniorities, setSeniorities] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data: seniorities = [], isLoading: loading } = useSeniorities();
+  const invalidate = useInvalidate();
+
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [deleteError, setDeleteError] = useState('');
 
-  const load = async () => {
-    try { const res = await seniorityApi.getAll(); setSeniorities(res.data); } finally { setLoading(false); }
-  };
-  useEffect(() => { load(); }, []);
-
   const handleDelete = async (id) => {
     setDeleteError('');
-    try { await seniorityApi.delete(id); setDeleteConfirm(null); load(); }
+    try { await seniorityApi.delete(id); setDeleteConfirm(null); invalidate.all(); }
     catch (e) { setDeleteError(e.response?.data?.error || 'Silinemedi.'); }
   };
 
@@ -257,7 +254,7 @@ export default function SenioritiesPage() {
 
       {modalOpen && (
         <SeniorityModal seniority={editing}
-          onSave={() => { setModalOpen(false); load(); }}
+          onSave={() => { setModalOpen(false); invalidate.all(); }}
           onClose={() => setModalOpen(false)} />
       )}
 
