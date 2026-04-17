@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { projectApi, personnelApi, productApi, organizationApi, seniorityApi } from '../../services/api';
+import { projectApi } from '../../services/api';
+import { useProjects, usePersonnel, useProducts, useOrganization, useSeniorities, useInvalidate } from '../../hooks/useQueries';
 import SearchableSelect from '../SearchableSelect';
 import { ProjectDetail } from '../Projects/ProjectsPage';
 
@@ -378,33 +379,17 @@ function ProjectCard({ item, personnelMap, onEdit, onDelete, onConvert, onDetail
 // ── Ana Sayfa ─────────────────────────────────────────────────────────────────
 export default function SalesPage() {
   const navigate = useNavigate();
-  const [potProjects, setPotProjects] = useState([]);
-  const [personnel, setPersonnel] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [units, setUnits] = useState([]);
-  const [seniorities, setSeniorities] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data: allProjects = [], isLoading: loading } = useProjects();
+  const potProjects = allProjects.filter(p => p.projectStatus === 'POTANSIYEL');
+  const { data: personnel = [] }   = usePersonnel();
+  const { data: products = [] }    = useProducts();
+  const { data: units = [] }       = useOrganization();
+  const { data: seniorities = [] } = useSeniorities();
+  const invalidate                 = useInvalidate();
+
   const [selectedProject, setSelectedProject] = useState(null);
   const [editing, setEditing] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
-
-  const load = async () => {
-    const [pRes, perRes, prRes, uRes, sRes] = await Promise.all([
-      projectApi.getAll(), personnelApi.getAll(), productApi.getAll(),
-      organizationApi.getAll(), seniorityApi.getAll(),
-    ]);
-    const allProjects = pRes.data;
-    setPotProjects(allProjects.filter(p => p.projectStatus === 'POTANSIYEL'));
-    setPersonnel(perRes.data);
-    setProducts(prRes.data);
-    setUnits(uRes.data);
-    setSeniorities(sRes.data);
-    setLoading(false);
-    // Detay açıksa tazele
-    setSelectedProject(prev => prev ? (allProjects.find(p => p.id === prev.id) || null) : null);
-  };
-
-  useEffect(() => { load(); }, []);
 
   const personnelMap = Object.fromEntries(personnel.map(p => [String(p.id), p]));
 
@@ -416,7 +401,8 @@ export default function SalesPage() {
   const handleDelete = async (item) => {
     await projectApi.delete(item.id);
     setDeleteConfirm(null);
-    load();
+    setSelectedProject(null);
+    invalidate.projects();
   };
 
   const totalEstimated = potProjects.reduce((sum, p) => sum + (p.budget || 0) * (p.probability ?? 50) / 100, 0);
@@ -446,7 +432,7 @@ export default function SalesPage() {
           <PotentialProjectModal
             project={editing?.id ? editing : null}
             personnel={personnel}
-            onSave={() => { setEditing(null); load(); }}
+            onSave={() => { setEditing(null); invalidate.projects(); }}
             onClose={() => setEditing(null)}
           />
         )}
