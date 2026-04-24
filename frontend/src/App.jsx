@@ -11,14 +11,17 @@ import ProductsPage from './components/Products/ProductsPage';
 import OrganizationPage from './components/Organization/OrganizationPage';
 import SalesPage from './components/Sales/SalesPage';
 import PotansiyelSiparislerPage from './components/Sales/PotansiyelSiparislerPage';
+import SiparislerPage from './components/Sales/SiparislerPage';
 import BudgetPage from './components/Budget/BudgetPage';
 import ResourcePlanningPage from './components/ResourcePlanning/ResourcePlanningPage';
 import PnLPage from './components/PnL/PnLPage';
 import ProjectTypesPage from './components/ProjectTypes/ProjectTypesPage';
 import ProjectCategoriesPage from './components/ProjectCategories/ProjectCategoriesPage';
+import CostTypesPage from './components/CostTypes/CostTypesPage';
 import { toSlug } from './components/Sidebar';
 import { projectCategoryApi } from './services/api';
 import DashboardPage from './components/Dashboard/DashboardPage';
+import { ToastProvider } from './components/Toast/Toaster';
 import './styles/global.css';
 
 function UserIcon() {
@@ -240,7 +243,9 @@ function AppContent() {
             <Route path="/project-categories" element={<ProjectCategoriesPage />} />
             <Route path="/sales" element={<SalesPage />} />
             <Route path="/potansiyel-siparisler" element={<PotansiyelSiparislerPage />} />
+            <Route path="/siparisler" element={<SiparislerPage />} />
             <Route path="/budget" element={<BudgetPage />} />
+            <Route path="/cost-types" element={<CostTypesPage />} />
           </Routes>
         </main>
       </div>
@@ -262,7 +267,9 @@ const queryClient = new QueryClient({
     <BrowserRouter>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <AppContent />
+          <ToastProvider>
+            <AppContent />
+          </ToastProvider>
         </AuthProvider>
       </QueryClientProvider>
     </BrowserRouter>

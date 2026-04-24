@@ -2,19 +2,8 @@ import { NavLink, useLocation, useNavigate, Link } from 'react-router-dom';
 import { useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useCategories } from '../hooks/useQueries';
-
-export function toSlug(name) {
-  return name
-    .toLowerCase()
-    .replace(/ı/g, 'i').replace(/İ/g, 'i')
-    .replace(/ş/g, 's').replace(/Ş/g, 's')
-    .replace(/ğ/g, 'g').replace(/Ğ/g, 'g')
-    .replace(/ü/g, 'u').replace(/Ü/g, 'u')
-    .replace(/ö/g, 'o').replace(/Ö/g, 'o')
-    .replace(/ç/g, 'c').replace(/Ç/g, 'c')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
+import { toSlug } from '../utils/slug';
+export { toSlug };
 import logo from '../assets/logo.png';
 import logoIcon from '../assets/logo-icon.png';
 
@@ -61,7 +50,7 @@ const CAT_ICONS = {
   star:     () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
 };
 
-const SETTINGS_ROUTES = ['/seniorities', '/personnel', '/organization', '/project-types', '/project-categories'];
+const SETTINGS_ROUTES = ['/seniorities', '/personnel', '/organization', '/project-types', '/project-categories', '/cost-types'];
 
 export default function Sidebar() {
   const location = useLocation();
@@ -125,6 +114,10 @@ export default function Sidebar() {
             <NavLink to="/project-categories" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Proje Kategorileri">
               <Icons.Grid />{!collapsed && <span className="nav-item-label">Proje Kategorileri</span>}
             </NavLink>
+            {!collapsed && <div className="sidebar-section-label" style={{ marginTop: 8 }}>Maliyetler</div>}
+            <NavLink to="/cost-types" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Maliyet Tipleri">
+              <Icons.DollarSign />{!collapsed && <span className="nav-item-label">Maliyet Tipleri</span>}
+            </NavLink>
             {!collapsed && <div className="sidebar-section-label" style={{ marginTop: 8 }}>Kaynaklar</div>}
             <NavLink to="/seniorities" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Kıdem Yönetimi">
               <Icons.Award />{!collapsed && <span className="nav-item-label">Kıdem Yönetimi</span>}
@@ -154,6 +147,7 @@ export default function Sidebar() {
                   <NavLink
                     key={cat.id}
                     to={`/category/${toSlug(cat.name)}`}
+                    state={{ fromSidebar: true }}
                     className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
                     title={menuLabel}
                     style={cat.color ? { '--cat-color': cat.color } : {}}
@@ -179,6 +173,9 @@ export default function Sidebar() {
               </NavLink>
               <NavLink to="/potansiyel-siparisler" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Potansiyel Siparişler">
                 <Icons.Box />{!collapsed && <span className="nav-item-label">Potansiyel Siparişler</span>}
+              </NavLink>
+              <NavLink to="/siparisler" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Siparişler">
+                <Icons.DollarSign />{!collapsed && <span className="nav-item-label">Siparişler</span>}
               </NavLink>
             </div>
 

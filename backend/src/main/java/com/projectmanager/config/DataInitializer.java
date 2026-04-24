@@ -101,7 +101,6 @@ public class DataInitializer implements CommandLineRunner {
                 ne.setYear(newYear);
                 ne.setNeed(e.getNeed());
                 ne.setPlanned(e.getPlanned());
-                ne.setActual(e.getActual());
                 shifted.add(ne);
             }
 

@@ -1,5 +1,6 @@
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useProjects, useCategories } from '../../hooks/useQueries';
+import { useProjects, useCategories, useAllProjectCosts } from '../../hooks/useQueries';
 import { toSlug } from '../Sidebar';
 
 function fmt(v) {
@@ -11,8 +12,18 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const { data: categoriesRaw = [], isLoading: catsLoading } = useCategories();
   const { data: projects = [], isLoading: projsLoading } = useProjects();
+  const { data: allCosts = [] } = useAllProjectCosts();
   const categories = [...categoriesRaw].sort((a, b) => a.stepOrder - b.stepOrder);
   const loading = catsLoading || projsLoading;
+
+  // Proje başına gerçekleşen maliyet toplamı
+  const costsByProjectId = useMemo(() => {
+    const map = {};
+    for (const c of allCosts) {
+      map[c.projectId] = (map[c.projectId] || 0) + (Number(c.amount) || 0);
+    }
+    return map;
+  }, [allCosts]);
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: 'var(--text-muted)', fontSize: 14 }}>
@@ -35,8 +46,15 @@ export default function DashboardPage() {
         {categories.map(cat => {
           const catProjects = activeProjects.filter(p => p.categoryId === cat.id);
           const totalBudget     = catProjects.reduce((s, p) => s + (p.budget || 0), 0);
-          const remainingBudget = catProjects.reduce((s, p) => s + (p.remainingBudget || 0), 0);
+          const totalCosts      = catProjects.reduce((s, p) => s + (costsByProjectId[p.id] || 0), 0);
+          const remainingBudget = totalBudget - totalCosts;
           const potentialBudget = catProjects.reduce((s, p) => s + (p.potentialSales || 0), 0);
+          // Gerçekleşen gelir: ödeme planındaki tahsil edilmiş kalemler
+          const totalRevenue = catProjects.reduce((s, p) =>
+            s + (p.paymentPlan || []).filter(i => i.actualYear).reduce((a, i) => a + (i.actualAmount || i.amount || 0), 0), 0);
+          // Planlanan gelir: ödeme planındaki tüm kalemler
+          const totalPlanned = catProjects.reduce((s, p) =>
+            s + (p.paymentPlan || []).reduce((a, i) => a + (i.amount || 0), 0), 0);
 
           return (
             <div
@@ -73,16 +91,24 @@ export default function DashboardPage() {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Planlanan Gelir</span>
+                  <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: 500, color: 'var(--text-secondary)' }}>{fmt(totalPlanned) ?? '0'} ₺</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Gerçekleşen Gelir</span>
+                  <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: 500, color: '#34c97a' }}>{fmt(totalRevenue) ?? '0'} ₺</span>
+                </div>
+                <div style={{ height: 1, background: 'var(--border)', margin: '2px 0' }} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Gerçekleşen Maliyet</span>
+                  <span style={{
+                    fontFamily: 'DM Mono, monospace', fontWeight: 500,
+                    color: totalCosts > 0 ? '#f97316' : 'var(--text-secondary)',
+                  }}>{fmt(totalCosts) ?? '0'} ₺</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                   <span style={{ color: 'var(--text-muted)' }}>Toplam Bütçe</span>
                   <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: 500, color: 'var(--text-secondary)' }}>{fmt(totalBudget) ?? '0'} ₺</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                  <span style={{ color: 'var(--text-muted)' }}>Kalan Bütçe</span>
-                  <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: 500, color: 'var(--text-secondary)' }}>{fmt(remainingBudget) ?? '0'} ₺</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                  <span style={{ color: 'var(--text-muted)' }}>Potansiyel</span>
-                  <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: 500, color: 'var(--text-secondary)' }}>{fmt(potentialBudget) ?? '0'} ₺</span>
                 </div>
               </div>
             </div>

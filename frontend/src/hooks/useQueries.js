@@ -1,8 +1,8 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import {
   projectApi, projectCategoryApi, projectTypeApi,
   personnelApi, seniorityApi, organizationApi,
-  productApi, potentialSaleApi,
+  productApi, potentialSaleApi, costTypeApi, projectCostApi,
 } from '../services/api';
 
 // ── Query Keys ────────────────────────────────────────────────────────────────
@@ -10,6 +10,7 @@ export const QK = {
   workflowSteps:  ['workflowSteps'],
   projects:       ['projects'],
   project:        (id) => ['projects', id],
+  projectsPaged:  (categoryId, page) => ['projects', 'paged', categoryId, page],
   categories:     ['categories'],
   projectTypes:   ['projectTypes'],
   personnel:      ['personnel'],
@@ -18,6 +19,10 @@ export const QK = {
   products:       ['products'],
   potentialSales: ['potentialSales'],
   potentialSalesByProject: (projectId) => ['potentialSales', 'project', projectId],
+  costTypes:      ['costTypes'],
+  projectCosts:   (projectId) => ['projectCosts', projectId],
+  allProjectCosts: ['allProjectCosts'],
+  siparisler:     ['siparisler'],
 };
 
 // ── Ortak ayarlar ─────────────────────────────────────────────────────────────
@@ -45,10 +50,25 @@ export function useAllWorkflowSteps(categories) {
   });
 }
 
-export function useProjects() {
+export function useProjects({ enabled = true } = {}) {
   return useQuery({
     queryKey: QK.projects,
     queryFn: () => projectApi.getAll().then(r => r.data),
+    enabled,
+    ...DYNAMIC_OPTIONS,
+  });
+}
+
+// Kategori sayfaları için sayfalandırılmış proje sorgusu
+// Spring Page<Project> döner: { content, totalPages, totalElements, number, size }
+export function useProjectsPaged(categoryId, page = 0, size = 24) {
+  return useQuery({
+    queryKey: QK.projectsPaged(categoryId, page),
+    queryFn: () =>
+      projectApi.getPaged({ categoryId, excludeStatus: 'POTANSIYEL', page, size })
+        .then(r => r.data),
+    enabled: !!categoryId,
+    placeholderData: keepPreviousData,  // sayfa geçişlerinde eski veri görünmeye devam eder
     ...DYNAMIC_OPTIONS,
   });
 }
@@ -118,11 +138,47 @@ export function usePotentialSales() {
   });
 }
 
+// Kazanılmış siparişler (KAZANILDI statüsündeki SIPARIS tipindekiler)
+export function useSiparisler() {
+  return useQuery({
+    queryKey: QK.siparisler,
+    queryFn: () => potentialSaleApi.getAll().then(r =>
+      r.data.filter(s => s.saleType === 'SIPARIS' && s.status === 'KAZANILDI')
+    ),
+    ...DYNAMIC_OPTIONS,
+  });
+}
+
 export function usePotentialSalesByProject(projectId) {
   return useQuery({
     queryKey: QK.potentialSalesByProject(projectId),
     queryFn: () => potentialSaleApi.getByProject(projectId).then(r => r.data),
     enabled: !!projectId,
+    ...DYNAMIC_OPTIONS,
+  });
+}
+
+export function useCostTypes() {
+  return useQuery({
+    queryKey: QK.costTypes,
+    queryFn: () => costTypeApi.getAll().then(r => r.data),
+    ...STATIC_OPTIONS,
+  });
+}
+
+export function useProjectCosts(projectId) {
+  return useQuery({
+    queryKey: QK.projectCosts(projectId),
+    queryFn: () => projectCostApi.getByProject(projectId).then(r => r.data),
+    enabled: !!projectId,
+    ...DYNAMIC_OPTIONS,
+  });
+}
+
+export function useAllProjectCosts() {
+  return useQuery({
+    queryKey: QK.allProjectCosts,
+    queryFn: () => projectCostApi.getAll().then(r => r.data),
     ...DYNAMIC_OPTIONS,
   });
 }
@@ -138,7 +194,12 @@ export function useInvalidate() {
     projectTypes: () => qc.invalidateQueries({ queryKey: QK.projectTypes }),
     personnel:    () => qc.invalidateQueries({ queryKey: QK.personnel }),
     products:     () => qc.invalidateQueries({ queryKey: QK.products }),
-    potentialSales: () => qc.invalidateQueries({ queryKey: QK.potentialSales }),
+    potentialSales: () => {
+      qc.invalidateQueries({ queryKey: QK.potentialSales });
+      qc.invalidateQueries({ queryKey: QK.siparisler });
+    },
+    costTypes:    () => qc.invalidateQueries({ queryKey: QK.costTypes }),
+    projectCosts: (id) => qc.invalidateQueries({ queryKey: QK.projectCosts(id) }),
     all:          () => qc.invalidateQueries(),
   };
 }

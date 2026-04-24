@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../../auth/AuthContext';
-import { useProjects, usePersonnel, useSeniorities, usePotentialSales, useProjectTypes, useOrganization } from '../../hooks/useQueries';
+import { useProjects, usePersonnel, useSeniorities, usePotentialSales, useProjectTypes, useOrganization, useAllProjectCosts } from '../../hooks/useQueries';
 
 // ── Sabitler & Yardımcılar ────────────────────────────────────────────────────
 
@@ -45,27 +45,27 @@ function emptyMonthData(year, month) {
   return {
     year, month,
     gider: 0, sozlesmeli: 0, potPrije: 0, potSiparis: 0, planSiparis: 0,
-    urunGeliri: 0, gerceklesenGider: 0, potUrunGeliri: 0,
+    gerceklesenGider: 0, gerceklesenGelir: 0,
     giderBreakdown: [], sozlesmeliBreakdown: [],
+    gerceklesenGiderBreakdown: [], gerceklesenGelirBreakdown: [],
     potPrijeBreakdown: [], potSiparisBreakdown: [], planSiparisBreakdown: [],
-    toplam: 0, toplamPotansiyel: 0,
+    gerceklesenToplam: 0, toplam: 0, potansiyelGelir: 0, toplamPotansiyel: 0,
   };
 }
 
 function recalcTotals(d) {
-  d.toplam           = d.sozlesmeli - d.gider;
-  d.toplamPotansiyel = d.sozlesmeli + d.potPrije + d.potSiparis + d.planSiparis - d.gider;
+  d.gerceklesenToplam = d.gerceklesenGelir - d.gerceklesenGider;
+  d.toplam            = d.sozlesmeli + d.planSiparis - d.gider;
+  d.potansiyelGelir   = d.potPrije + d.potSiparis;
+  d.toplamPotansiyel  = d.sozlesmeli + d.planSiparis + d.potPrije + d.potSiparis - d.gider;
 }
 
 // Aktif/başlamış/devam eden/tamamlanan proje için gider + sözleşmeli hesapla
-function calcProjectPnL(project, personnelMap, seniorityMap, linkedSiparisler = []) {
+function calcProjectPnL(project, personnelMap, seniorityMap, linkedSiparisler = [], projectCosts = []) {
   const months = monthsBetween(
     project.startYear, project.startMonth,
     project.endYear,   project.endMonth,
   );
-  const hasPayments = (project.paymentPlan || []).some(i => i.amount > 0);
-  const effectiveBudget = project.remainingBudget || project.budget || 0;
-  const monthlyBudget = hasPayments ? 0 : effectiveBudget / (months.length || 1);
 
   const result = {};
   for (const { year, month } of months) {
@@ -84,15 +84,30 @@ function calcProjectPnL(project, personnelMap, seniorityMap, linkedSiparisler = 
     }
     if (d.gider > 0) d.giderBreakdown.push({ id: project.id, name: project.name, amount: d.gider });
 
-    // Sözleşmeli Planlanan Gelir (ödeme planı / bütçe)
-    d.sozlesmeli = hasPayments ? 0 : monthlyBudget;
-    if (hasPayments) {
-      for (const item of (project.paymentPlan || [])) {
-        if (item.plannedYear === year && item.plannedMonth === month)
-          d.sozlesmeli += item.amount || 0;
-      }
+    // Sözleşmeli Planlanan Gelir — yalnızca ödeme planı kalemlerinden
+    for (const item of (project.paymentPlan || [])) {
+      if (item.plannedYear === year && item.plannedMonth === month)
+        d.sozlesmeli += item.amount || 0;
     }
     if (d.sozlesmeli > 0) d.sozlesmeliBreakdown.push({ id: project.id, name: project.name, amount: d.sozlesmeli });
+
+    // Gerçekleşen Gider (Maliyetler sekmesinden girilen veriler)
+    for (const cost of projectCosts) {
+      if (cost.year === year && cost.month === month) {
+        d.gerceklesenGider += Number(cost.amount) || 0;
+      }
+    }
+    if (d.gerceklesenGider > 0)
+      d.gerceklesenGiderBreakdown.push({ id: project.id, name: project.name, amount: d.gerceklesenGider });
+
+    // Gerçekleşen Proje Geliri (ödeme planı — actualYear/actualMonth alanları)
+    for (const item of (project.paymentPlan || [])) {
+      if (item.actualYear === year && item.actualMonth === month) {
+        const amt = item.actualAmount || item.amount || 0;
+        d.gerceklesenGelir += amt;
+        d.gerceklesenGelirBreakdown.push({ id: project.id, name: project.name, amount: amt });
+      }
+    }
 
     // Bağlı Potansiyel Siparişler
     for (const sale of linkedSiparisler) {
@@ -114,54 +129,69 @@ function calcProjectPnL(project, personnelMap, seniorityMap, linkedSiparisler = 
 }
 
 function sumPnL(monthlyMap) {
-  let gider = 0, sozlesmeli = 0, potPrije = 0, potSiparis = 0, planSiparis = 0;
+  let gider = 0, sozlesmeli = 0, potPrije = 0, potSiparis = 0, planSiparis = 0,
+      gerceklesenGider = 0, gerceklesenGelir = 0;
   for (const v of Object.values(monthlyMap)) {
-    gider       += v.gider;
-    sozlesmeli  += v.sozlesmeli;
-    potPrije    += v.potPrije;
-    potSiparis  += v.potSiparis;
-    planSiparis += v.planSiparis;
+    gider            += v.gider;
+    sozlesmeli       += v.sozlesmeli;
+    potPrije         += v.potPrije;
+    potSiparis       += v.potSiparis;
+    planSiparis      += v.planSiparis;
+    gerceklesenGider += v.gerceklesenGider;
+    gerceklesenGelir += v.gerceklesenGelir;
   }
   return {
     gider, sozlesmeli, potPrije, potSiparis, planSiparis,
-    toplam:           sozlesmeli - gider,
-    toplamPotansiyel: sozlesmeli + potPrije + potSiparis + planSiparis - gider,
+    gerceklesenGider, gerceklesenGelir,
+    gerceklesenToplam: gerceklesenGelir - gerceklesenGider,
+    toplam:            sozlesmeli + planSiparis - gider,
+    potansiyelGelir:   potPrije + potSiparis,
+    toplamPotansiyel:  sozlesmeli + planSiparis + potPrije + potSiparis - gider,
   };
 }
 
-function aggPnL(activeProjects, potProjects, personnelMap, seniorityMap, allSiparisler) {
+function aggPnL(activeProjects, potProjects, personnelMap, seniorityMap, allSiparisler, costsByProject = {}) {
   const agg = {};
 
   const merge = (key, val) => {
     if (!agg[key]) {
       agg[key] = { ...val,
-        giderBreakdown: [...val.giderBreakdown],
-        sozlesmeliBreakdown: [...val.sozlesmeliBreakdown],
-        potPrijeBreakdown: [...val.potPrijeBreakdown],
-        potSiparisBreakdown: [...val.potSiparisBreakdown],
-        planSiparisBreakdown: [...val.planSiparisBreakdown],
+        giderBreakdown:             [...val.giderBreakdown],
+        sozlesmeliBreakdown:        [...val.sozlesmeliBreakdown],
+        gerceklesenGiderBreakdown:  [...val.gerceklesenGiderBreakdown],
+        gerceklesenGelirBreakdown:  [...val.gerceklesenGelirBreakdown],
+        potPrijeBreakdown:          [...val.potPrijeBreakdown],
+        potSiparisBreakdown:        [...val.potSiparisBreakdown],
+        planSiparisBreakdown:       [...val.planSiparisBreakdown],
       };
     } else {
       const a = agg[key];
-      a.gider                += val.gider;
-      a.sozlesmeli           += val.sozlesmeli;
-      a.potPrije             += val.potPrije;
-      a.potSiparis           += val.potSiparis;
-      a.planSiparis          += val.planSiparis;
-      a.toplam               += val.toplam;
-      a.toplamPotansiyel     += val.toplamPotansiyel;
-      a.giderBreakdown       = a.giderBreakdown.concat(val.giderBreakdown);
-      a.sozlesmeliBreakdown  = a.sozlesmeliBreakdown.concat(val.sozlesmeliBreakdown);
-      a.potPrijeBreakdown    = a.potPrijeBreakdown.concat(val.potPrijeBreakdown);
-      a.potSiparisBreakdown  = a.potSiparisBreakdown.concat(val.potSiparisBreakdown);
-      a.planSiparisBreakdown = a.planSiparisBreakdown.concat(val.planSiparisBreakdown);
+      a.gider                    += val.gider;
+      a.sozlesmeli               += val.sozlesmeli;
+      a.potPrije                 += val.potPrije;
+      a.potSiparis               += val.potSiparis;
+      a.planSiparis              += val.planSiparis;
+      a.gerceklesenGider          += val.gerceklesenGider;
+      a.gerceklesenGelir          += val.gerceklesenGelir;
+      a.gerceklesenToplam         += val.gerceklesenToplam;
+      a.toplam                    += val.toplam;
+      a.potansiyelGelir           += val.potansiyelGelir;
+      a.toplamPotansiyel          += val.toplamPotansiyel;
+      a.giderBreakdown             = a.giderBreakdown.concat(val.giderBreakdown);
+      a.sozlesmeliBreakdown        = a.sozlesmeliBreakdown.concat(val.sozlesmeliBreakdown);
+      a.gerceklesenGiderBreakdown  = a.gerceklesenGiderBreakdown.concat(val.gerceklesenGiderBreakdown);
+      a.gerceklesenGelirBreakdown  = a.gerceklesenGelirBreakdown.concat(val.gerceklesenGelirBreakdown);
+      a.potPrijeBreakdown         = a.potPrijeBreakdown.concat(val.potPrijeBreakdown);
+      a.potSiparisBreakdown       = a.potSiparisBreakdown.concat(val.potSiparisBreakdown);
+      a.planSiparisBreakdown      = a.planSiparisBreakdown.concat(val.planSiparisBreakdown);
     }
   };
 
-  // Aktif projeler: gider + sozlesmeli + bağlı siparişler
+  // Aktif projeler: gider + sozlesmeli + bağlı siparişler + gerçekleşen
   for (const p of activeProjects) {
     const linked = allSiparisler.filter(s => s.projectId && String(s.projectId) === String(p.id));
-    const md = calcProjectPnL(p, personnelMap, seniorityMap, linked);
+    const projectCosts = costsByProject[String(p.id)] || [];
+    const md = calcProjectPnL(p, personnelMap, seniorityMap, linked, projectCosts);
     for (const [key, val] of Object.entries(md)) merge(key, val);
   }
 
@@ -216,16 +246,19 @@ function aggPnL(activeProjects, potProjects, personnelMap, seniorityMap, allSipa
 // ── Grid ──────────────────────────────────────────────────────────────────────
 
 const ROWS = [
-  { key: 'sozlesmeli',       label: 'Proje Geliri',               bold: false, color: '#22c55e',          expandable: 'soz'  },
-  { key: 'planSiparis',      label: 'Sipariş Geliri',             bold: false, color: '#34d399',          expandable: 'plsp' }, // TODO: hesaplama değişecek
-  { key: 'urunGeliri',       label: 'Ürün Geliri',                bold: false, color: 'var(--text-muted)', expandable: false  }, // TODO: eklenecek
-  { key: 'gerceklesenGider', label: 'Gerçekleşen Gider',         bold: false, color: 'var(--text-muted)', expandable: false  }, // TODO: eklenecek
-  { key: 'gider',            label: 'Planlanan Gider',            bold: false, color: '#ef4444',          expandable: 'gid'  },
-  { key: 'potPrije',         label: 'Potansiyel Proje Geliri',    bold: false, color: '#f59e0b',          expandable: 'ppj'  },
-  { key: 'potUrunGeliri',    label: 'Potansiyel Ürün Geliri',     bold: false, color: 'var(--text-muted)', expandable: false  }, // TODO: eklenecek
-  { key: 'potSiparis',       label: 'Potansiyel Sipariş Geliri',  bold: false, color: '#60a5fa',          expandable: 'psp'  }, // TODO: hesaplama değişecek
-  { key: 'toplam',           label: 'Toplam',                     bold: true,  color: 'dynamic',          expandable: false  },
-  { key: 'toplamPotansiyel', label: 'Toplam Potansiyel',          bold: true,  color: 'dynamic',          expandable: false  },
+  // ── Gerçekleşen ──────────────────────────────────────────────
+  { key: 'gerceklesenGelir',  label: 'Gerçekleşen Proje Gelirleri', bold: false, color: '#22c55e', expandable: 'grcGelir', section: 'gerceklesen' },
+  { key: 'gerceklesenGider',  label: 'Gerçekleşen Gider',           bold: false, color: '#f97316', expandable: 'grcGid',   section: 'gerceklesen' },
+  { key: 'gerceklesenToplam', label: 'Toplam',                      bold: true,  color: 'dynamic', expandable: false,      section: 'gerceklesen', sectionEnd: true },
+  // ── Planlanan ────────────────────────────────────────────────
+  { key: 'sozlesmeli',        label: 'Planlanan Proje Gelirleri',   bold: false, color: '#4ade80', expandable: 'soz',      section: 'planlanan' },
+  { key: 'planSiparis',       label: 'Planlanan Sipariş Geliri',    bold: false, color: '#34d399', expandable: 'plsp',     section: 'planlanan' },
+  { key: 'gider',             label: 'Planlanan Gider',             bold: false, color: '#ef4444', expandable: 'gid',      section: 'planlanan' },
+  { key: 'toplam',            label: 'Toplam',                      bold: true,  color: 'dynamic', expandable: false,      section: 'planlanan',   sectionEnd: true },
+  // ── Potansiyel ───────────────────────────────────────────────
+  { key: 'potPrije',          label: 'Potansiyel Proje Geliri',     bold: false, color: '#f59e0b', expandable: 'ppj',      section: 'potansiyel' },
+  { key: 'potSiparis',        label: 'Potansiyel Sipariş Geliri',   bold: false, color: '#60a5fa', expandable: 'psp',      section: 'potansiyel' },
+  { key: 'potansiyelGelir',   label: 'Potansiyel Gelir',            bold: true,  color: 'dynamic', expandable: false,      section: 'potansiyel',  sectionEnd: true },
 ];
 
 function MonthlyGrid({ monthlyData }) {
@@ -255,11 +288,13 @@ function MonthlyGrid({ monthlyData }) {
     return Object.entries(map).map(([id, name]) => ({ id, name }));
   };
 
-  const allGiderProjects    = useMemo(() => collectBreakdown('giderBreakdown'),       [months, monthlyData]); // eslint-disable-line
-  const allSozProjects      = useMemo(() => collectBreakdown('sozlesmeliBreakdown'),  [months, monthlyData]); // eslint-disable-line
-  const allPotPrijeProjects = useMemo(() => collectBreakdown('potPrijeBreakdown'),    [months, monthlyData]); // eslint-disable-line
-  const allPotSiparis       = useMemo(() => collectBreakdown('potSiparisBreakdown'),  [months, monthlyData]); // eslint-disable-line
-  const allPlanSiparis      = useMemo(() => collectBreakdown('planSiparisBreakdown'), [months, monthlyData]); // eslint-disable-line
+  const allGiderProjects         = useMemo(() => collectBreakdown('giderBreakdown'),             [months, monthlyData]); // eslint-disable-line
+  const allSozProjects           = useMemo(() => collectBreakdown('sozlesmeliBreakdown'),        [months, monthlyData]); // eslint-disable-line
+  const allGerceklesenGiderProj  = useMemo(() => collectBreakdown('gerceklesenGiderBreakdown'),  [months, monthlyData]); // eslint-disable-line
+  const allGerceklesenGelirProj  = useMemo(() => collectBreakdown('gerceklesenGelirBreakdown'),  [months, monthlyData]); // eslint-disable-line
+  const allPotPrijeProjects      = useMemo(() => collectBreakdown('potPrijeBreakdown'),          [months, monthlyData]); // eslint-disable-line
+  const allPotSiparis            = useMemo(() => collectBreakdown('potSiparisBreakdown'),        [months, monthlyData]); // eslint-disable-line
+  const allPlanSiparis           = useMemo(() => collectBreakdown('planSiparisBreakdown'),       [months, monthlyData]); // eslint-disable-line
 
   const stickyCell = (bg, extra = {}) => ({
     minWidth: LABEL_W, width: LABEL_W, padding: '5px 12px',
@@ -307,27 +342,35 @@ function MonthlyGrid({ monthlyData }) {
         </div>
 
         {/* Rows */}
-        {ROWS.map(({ key, label, bold, color, expandable }, ri) => {
-          const rowBg = ri % 2 === 0 ? 'var(--bg-card)' : 'var(--bg-alt-row)';
-          const stickyBg = ri % 2 === 0 ? 'var(--bg-card)' : 'var(--bg-secondary)';
+        {ROWS.map(({ key, label, bold, color, expandable, section, sectionEnd }, ri) => {
+          // Toplam satırları için section'a özel arka plan
+          // ÖNEMLİ: stickyBg daima OPAK olmalı — semi-transparent renkler sticky'de üst üste binmeye yol açar
+          const isTotalRow = bold && !expandable;
+          const rowBg    = isTotalRow ? 'var(--bg-secondary)' : (ri % 2 === 0 ? 'var(--bg-card)' : 'var(--bg-alt-row)');
+          const stickyBg = isTotalRow ? 'var(--bg-secondary)' : (ri % 2 === 0 ? 'var(--bg-card)' : 'var(--bg-secondary)');
+          // Yeni section başlangıcı: önceki satır sectionEnd ise üstte kalın çizgi
+          const prevRow = ri > 0 ? ROWS[ri - 1] : null;
+          const isSectionStart = prevRow?.sectionEnd === true;
           const isExp = expandable && expandedRow === expandable;
           const toggleExp = expandable
             ? () => setExpandedRow(r => r === expandable ? null : expandable)
             : undefined;
 
-          const arrowColor = expandable === 'soz'  ? '#22c55e'
-                           : expandable === 'gid'  ? '#ef4444'
-                           : expandable === 'ppj'  ? '#f59e0b'
-                           : expandable === 'psp'  ? '#60a5fa'
-                           : expandable === 'plsp' ? '#34d399'
+          const arrowColor = expandable === 'soz'     ? '#4ade80'
+                           : expandable === 'gid'     ? '#ef4444'
+                           : expandable === 'grcGid'  ? '#f97316'
+                           : expandable === 'grcGelir'? '#22c55e'
+                           : expandable === 'ppj'     ? '#f59e0b'
+                           : expandable === 'psp'     ? '#60a5fa'
+                           : expandable === 'plsp'    ? '#34d399'
                            : 'var(--accent)';
 
           return (
             <div key={key}>
               {/* Ana satır */}
-              <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: rowBg }}>
+              <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: rowBg, borderTop: isSectionStart ? '2px solid var(--border)' : 'none' }}>
                 <div
-                  style={{ ...stickyCell(stickyBg), color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4, cursor: expandable ? 'pointer' : 'default' }}
+                  style={{ ...stickyCell(stickyBg), color: isTotalRow ? 'var(--text-primary)' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4, cursor: expandable ? 'pointer' : 'default' }}
                   onClick={toggleExp}
                 >
                   {expandable && (
@@ -343,7 +386,7 @@ function MonthlyGrid({ monthlyData }) {
                   const val = d ? d[key] : 0;
                   const c   = color === 'dynamic' ? valColor(val) : (color || 'var(--text-primary)');
                   return (
-                    <div key={`${year}_${month}`} style={{ ...dataCell(isCur), fontWeight: bold ? 600 : 400, color: c }}>
+                    <div key={`${year}_${month}`} style={{ ...dataCell(isCur), fontWeight: bold ? 700 : 400, color: c }}>
                       {Math.abs(val) > 0.5 ? fmtK(val) : '—'}
                     </div>
                   );
@@ -353,11 +396,13 @@ function MonthlyGrid({ monthlyData }) {
               {/* Kırılım satırları — expandable key'e göre */}
               {isExp && (() => {
                 const cfg = {
-                  gid:  { list: allGiderProjects,    bdKey: 'giderBreakdown',        color: val => val > 0.5 ? '#ef4444' : 'var(--text-muted)' },
-                  soz:  { list: allSozProjects,       bdKey: 'sozlesmeliBreakdown',   color: val => val > 0.5 ? '#22c55e' : 'var(--text-muted)' },
-                  ppj:  { list: allPotPrijeProjects,  bdKey: 'potPrijeBreakdown',     color: val => val > 0.5 ? '#f59e0b' : 'var(--text-muted)' },
-                  psp:  { list: allPotSiparis,        bdKey: 'potSiparisBreakdown',   color: val => val > 0.5 ? '#60a5fa' : 'var(--text-muted)' },
-                  plsp: { list: allPlanSiparis,       bdKey: 'planSiparisBreakdown',  color: val => val > 0.5 ? '#34d399' : 'var(--text-muted)' },
+                  gid:     { list: allGiderProjects,        bdKey: 'giderBreakdown',             color: val => val > 0.5 ? '#ef4444' : 'var(--text-muted)' },
+                  soz:     { list: allSozProjects,          bdKey: 'sozlesmeliBreakdown',        color: val => val > 0.5 ? '#4ade80' : 'var(--text-muted)' },
+                  grcGid:  { list: allGerceklesenGiderProj, bdKey: 'gerceklesenGiderBreakdown',  color: val => val > 0.5 ? '#f97316' : 'var(--text-muted)' },
+                  grcGelir:{ list: allGerceklesenGelirProj, bdKey: 'gerceklesenGelirBreakdown',  color: val => val > 0.5 ? '#22c55e' : 'var(--text-muted)' },
+                  ppj:     { list: allPotPrijeProjects,     bdKey: 'potPrijeBreakdown',          color: val => val > 0.5 ? '#f59e0b' : 'var(--text-muted)' },
+                  psp:     { list: allPotSiparis,           bdKey: 'potSiparisBreakdown',        color: val => val > 0.5 ? '#60a5fa' : 'var(--text-muted)' },
+                  plsp:    { list: allPlanSiparis,          bdKey: 'planSiparisBreakdown',       color: val => val > 0.5 ? '#34d399' : 'var(--text-muted)' },
                 }[expandable];
                 if (!cfg) return null;
                 return cfg.list.map(item => (
@@ -389,26 +434,18 @@ function MonthlyGrid({ monthlyData }) {
 
 // ── Özet Kartı ────────────────────────────────────────────────────────────────
 
-function SummaryCard({ label, activeProjects, potProjects, personnelMap, seniorityMap, siparisler }) {
+function SummaryCard({ label, activeProjects, potProjects, personnelMap, seniorityMap, siparisler, costsByProject }) {
   const [open, setOpen] = useState(false);
   const { totals, monthlyAgg } = useMemo(() => {
-    const agg = aggPnL(activeProjects, potProjects, personnelMap, seniorityMap, siparisler);
+    const agg = aggPnL(activeProjects, potProjects, personnelMap, seniorityMap, siparisler, costsByProject);
     return { totals: sumPnL(agg), monthlyAgg: agg };
-  }, [activeProjects, potProjects, personnelMap, seniorityMap, siparisler]);
+  }, [activeProjects, potProjects, personnelMap, seniorityMap, siparisler, costsByProject]);
 
   return (
     <div style={{ borderRadius: 8, border: '2px solid var(--accent)', background: 'var(--bg-card)', overflow: 'hidden', marginBottom: 8 }}>
       <div onClick={() => setOpen(o => !o)} style={{ padding: '12px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--accent)' }}>{label}</div>
         <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
-          <span style={{ fontSize: 12 }}>
-            <span style={{ color: 'var(--text-secondary)' }}>Toplam: </span>
-            <span style={{ fontWeight: 700, color: valColor(totals.toplam) }}>{fmtK(totals.toplam)}</span>
-          </span>
-          <span style={{ fontSize: 12 }}>
-            <span style={{ color: 'var(--text-secondary)' }}>Toplam Pot.: </span>
-            <span style={{ fontWeight: 700, color: valColor(totals.toplamPotansiyel) }}>{fmtK(totals.toplamPotansiyel)}</span>
-          </span>
           <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{open ? '▲' : '▼'}</span>
         </div>
       </div>
@@ -461,10 +498,10 @@ function ProjectCard({ project, totals, onClick }) {
 
 // ── Proje Detay ───────────────────────────────────────────────────────────────
 
-function ProjectDetail({ project, personnelMap, seniorityMap, linkedSiparisler, onBack }) {
+function ProjectDetail({ project, personnelMap, seniorityMap, linkedSiparisler, projectCosts, onBack }) {
   const monthlyData = useMemo(
-    () => calcProjectPnL(project, personnelMap, seniorityMap, linkedSiparisler),
-    [project, personnelMap, seniorityMap, linkedSiparisler],
+    () => calcProjectPnL(project, personnelMap, seniorityMap, linkedSiparisler, projectCosts),
+    [project, personnelMap, seniorityMap, linkedSiparisler, projectCosts],
   );
   const totals = useMemo(() => sumPnL(monthlyData), [monthlyData]);
 
@@ -595,6 +632,7 @@ export default function PnLPage() {
   const { data: potSales = [] }     = usePotentialSales();
   const { data: projectTypes = [] } = useProjectTypes();
   const { data: units = [] }        = useOrganization();
+  const { data: allCosts = [] }     = useAllProjectCosts();
 
   const [selected, setSelected]     = useState(null);
   const [typeFilter, setTypeFilter] = useState(() => localStorage.getItem(filterKey) || 'ALL');
@@ -603,6 +641,16 @@ export default function PnLPage() {
   const seniorityMap = useMemo(() => Object.fromEntries(seniorities.map(s => [s.id, s])), [seniorities]);
   // Sadece kök (1. seviye) birimler
   const unitMap = useMemo(() => Object.fromEntries(units.filter(u => !u.parentId).map(u => [String(u.id), u])), [units]);
+  // Maliyet verilerini proje bazında grupla: { [projectId]: [{year, month, amount, ...}] }
+  const costsByProject = useMemo(() => {
+    const map = {};
+    for (const c of allCosts) {
+      const pid = String(c.projectId);
+      if (!map[pid]) map[pid] = [];
+      map[pid].push(c);
+    }
+    return map;
+  }, [allCosts]);
 
   // Aktif projeler (POTANSIYEL olmayanlar) — P&L'de bunlar görünür
   const activeProjects = useMemo(() => projects.filter(p => !p.projectStatus || p.projectStatus !== 'POTANSIYEL'), [projects]);
@@ -613,10 +661,11 @@ export default function PnLPage() {
     const map = {};
     for (const p of activeProjects) {
       const linked = siparisler.filter(s => s.projectId && String(s.projectId) === String(p.id));
-      map[p.id] = sumPnL(calcProjectPnL(p, personnelMap, seniorityMap, linked));
+      const projectCosts = costsByProject[String(p.id)] || [];
+      map[p.id] = sumPnL(calcProjectPnL(p, personnelMap, seniorityMap, linked, projectCosts));
     }
     return map;
-  }, [activeProjects, personnelMap, seniorityMap, siparisler]);
+  }, [activeProjects, personnelMap, seniorityMap, siparisler, costsByProject]);
 
   const filteredProjects = useMemo(() => {
     const base = typeFilter === 'ALL'
@@ -630,12 +679,14 @@ export default function PnLPage() {
 
   if (selected) {
     const linkedSiparisler = siparisler.filter(s => s.projectId && String(s.projectId) === String(selected.id));
+    const selectedCosts = costsByProject[String(selected.id)] || [];
     return (
       <ProjectDetail
         project={selected}
         personnelMap={personnelMap}
         seniorityMap={seniorityMap}
         linkedSiparisler={linkedSiparisler}
+        projectCosts={selectedCosts}
         onBack={() => setSelected(null)}
       />
     );
@@ -674,6 +725,7 @@ export default function PnLPage() {
         personnelMap={personnelMap}
         seniorityMap={seniorityMap}
         siparisler={siparisler}
+        costsByProject={costsByProject}
       />
 
       {/* Proje listesi */}

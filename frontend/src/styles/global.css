@@ -504,3 +504,79 @@ html, body, #root {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+
+/* ─── Utility Classes ───────────────────────────────────────────────────────
+   Bundan sonra yazılacak tüm bileşenlerde inline style yerine bu sınıflar kullanılır.
+   Mevcut büyük bileşenler (ProjectsPage vb.) refactor yapılmadan bu sınıflardan yararlanamaz;
+   yeni bileşenler bu sınıfları + CSS Modules kombinasyonuyla yazılır.
+   ─────────────────────────────────────────────────────────────────────── */
+
+/* Layout */
+.u-flex         { display: flex; }
+.u-flex-col     { display: flex; flex-direction: column; }
+.u-flex-1       { flex: 1; }
+.u-flex-wrap    { flex-wrap: wrap; }
+.u-items-center { align-items: center; }
+.u-items-start  { align-items: flex-start; }
+.u-items-end    { align-items: flex-end; }
+.u-justify-between { justify-content: space-between; }
+.u-justify-end     { justify-content: flex-end; }
+.u-justify-center  { justify-content: center; }
+.u-w-full       { width: 100%; }
+.u-relative     { position: relative; }
+
+/* Gap */
+.u-gap-4  { gap: 4px; }
+.u-gap-6  { gap: 6px; }
+.u-gap-8  { gap: 8px; }
+.u-gap-10 { gap: 10px; }
+.u-gap-12 { gap: 12px; }
+.u-gap-16 { gap: 16px; }
+.u-gap-20 { gap: 20px; }
+.u-gap-24 { gap: 24px; }
+
+/* Margin bottom */
+.u-mb-4  { margin-bottom: 4px; }
+.u-mb-8  { margin-bottom: 8px; }
+.u-mb-12 { margin-bottom: 12px; }
+.u-mb-16 { margin-bottom: 16px; }
+.u-mb-20 { margin-bottom: 20px; }
+.u-mb-24 { margin-bottom: 24px; }
+
+/* Margin top */
+.u-mt-4  { margin-top: 4px; }
+.u-mt-8  { margin-top: 8px; }
+.u-mt-16 { margin-top: 16px; }
+.u-mt-24 { margin-top: 24px; }
+
+/* Padding */
+.u-p-8  { padding: 8px; }
+.u-p-12 { padding: 12px; }
+.u-p-16 { padding: 16px; }
+.u-p-20 { padding: 20px; }
+.u-p-24 { padding: 24px; }
+
+/* Typography */
+.u-text-xs  { font-size: 11px; }
+.u-text-sm  { font-size: 12px; }
+.u-text-base { font-size: 13px; }
+.u-text-md  { font-size: 14px; }
+.u-fw-500   { font-weight: 500; }
+.u-fw-600   { font-weight: 600; }
+.u-fw-700   { font-weight: 700; }
+.u-mono     { font-family: 'DM Mono', monospace; }
+.u-uppercase { text-transform: uppercase; letter-spacing: 0.6px; }
+
+/* Color */
+.u-text-muted     { color: var(--text-muted); }
+.u-text-secondary { color: var(--text-secondary); }
+.u-text-primary   { color: var(--text-primary); }
+.u-text-accent    { color: var(--accent); }
+.u-text-success   { color: var(--success); }
+.u-text-danger    { color: var(--danger); }
+
+/* Borders & Radius */
+.u-rounded    { border-radius: var(--radius-sm); }
+.u-rounded-lg { border-radius: var(--radius); }
+.u-border     { border: 1px solid var(--border); }
+.u-border-top { border-top: 1px solid var(--border); }

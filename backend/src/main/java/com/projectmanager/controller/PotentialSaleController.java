@@ -40,6 +40,15 @@ public class PotentialSaleController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<?> delete(@PathVariable String id) {
-        return service.delete(id) ? ResponseEntity.ok().build() : ResponseEntity.notFound().build();
+        try {
+            return service.delete(id) ? ResponseEntity.ok().build() : ResponseEntity.notFound().build();
+        } catch (IllegalArgumentException e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
+    }
+
+    /** Eski KAZANILDI siparişlerinde eksik PaymentItem'ları oluşturur. */
+    @PostMapping("/repair-payment-items")
+    public ResponseEntity<?> repairPaymentItems() {
+        int count = service.repairPaymentItems();
+        return ResponseEntity.ok(Map.of("created", count));
     }
 }

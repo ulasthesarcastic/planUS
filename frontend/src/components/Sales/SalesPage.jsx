@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { projectApi } from '../../services/api';
 import { useProjects, usePersonnel, useProducts, useOrganization, useSeniorities, useInvalidate } from '../../hooks/useQueries';
 import SearchableSelect from '../SearchableSelect';
 import { ProjectDetail } from '../Projects/ProjectsPage';
 
-const MONTHS = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+import { MONTHS, addMonths, applyShift, buildShiftInfo } from '../../utils/salesUtils';
 const YEARS = [2024, 2025, 2026, 2027, 2028, 2029];
 const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP'];
 const fmt = (n) => (n || 0).toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -19,28 +19,6 @@ const computeEnd = (startMonth, startYear, duration) => {
 };
 // Başlama + bitiş → süre (ay)
 const computeDuration = (sm, sy, em, ey) => (ey - sy) * 12 + (em - sm) + 1;
-
-// ── Resource plan shift yardımcıları ─────────────────────────────────────────
-const addMonths = (month, year, offset) => {
-  const total = (year * 12 + month - 1) + offset;
-  return { month: (total % 12) + 1, year: Math.floor(total / 12) };
-};
-const applyShift = (entries, offset, newEndMonth, newEndYear) => {
-  const endTotal = newEndYear * 12 + newEndMonth;
-  return entries
-    .map(e => { const { month, year } = addMonths(e.month, e.year, offset); return { ...e, month, year }; })
-    .filter(e => (e.year * 12 + e.month) <= endTotal);
-};
-const buildShiftInfo = (entries, oldSM, oldSY, newSM, newSY, newEM, newEY) => {
-  if (!entries || entries.length === 0) return null;
-  const offset = (newSY * 12 + newSM) - (oldSY * 12 + oldSM);
-  const endTotal = newEY * 12 + newEM;
-  const shifted = entries.map(e => { const { month, year } = addMonths(e.month, e.year, offset); return { ...e, month, year }; });
-  const dropped = shifted.filter(e => (e.year * 12 + e.month) > endTotal);
-  const droppedMonths = [...new Set(dropped.map(e => `${MONTHS[e.month - 1]} ${e.year}`))];
-  if (offset === 0 && dropped.length === 0) return null;
-  return { offset, dropped: dropped.length, droppedMonths };
-};
 
 function AmountInput({ value, onChange, placeholder = '0', style = {} }) {
   const toDisplay = (v) => (v !== '' && v !== null && v !== undefined && !isNaN(Number(v))) ? Number(v).toLocaleString('tr-TR') : '';
@@ -281,13 +259,16 @@ function PotentialProjectModal({ project, personnel, onSave, onClose }) {
   );
 }
 
-// ── Proje Kartı (POTANSIYEL statüsündeki projeler) ────────────────────────────
-function ProjectCard({ item, personnelMap, onEdit, onDelete, onConvert, onDetail }) {
+// ── Proje Satırı (kompakt liste görünümü) ─────────────────────────────────────
+function ProjectRow({ item, personnelMap, onEdit, onDelete, onConvert, onDetail }) {
   const [hovered, setHovered] = useState(false);
   const [converting, setConverting] = useState(false);
   const prob = item.probability ?? 50;
   const estimated = (item.budget || 0) * prob / 100;
   const mgr = item.projectManagerId ? personnelMap[String(item.projectManagerId)] : null;
+  const dur = item.startMonth && item.endMonth
+    ? computeDuration(item.startMonth, item.startYear, item.endMonth, item.endYear)
+    : null;
 
   return (
     <div
@@ -295,83 +276,77 @@ function ProjectCard({ item, personnelMap, onEdit, onDelete, onConvert, onDetail
       onMouseLeave={() => setHovered(false)}
       onClick={onDetail}
       style={{
-        background: 'var(--bg-card)',
-        border: `1px solid ${hovered ? 'var(--accent)' : 'var(--border)'}`,
-        borderRadius: 12, padding: 16,
-        display: 'flex', flexDirection: 'column', gap: 10,
-        boxShadow: hovered ? '0 2px 14px rgba(99,102,241,0.12)' : 'none',
-        transition: 'box-shadow 0.15s, border-color 0.15s',
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '10px 14px',
+        background: hovered ? 'var(--bg-hover)' : 'transparent',
         cursor: 'pointer',
+        transition: 'background 0.12s',
+        borderBottom: '1px solid var(--border)',
       }}
     >
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{
-          fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
-          background: 'rgba(245,158,11,0.12)', color: '#f59e0b',
-        }}>Potansiyel</span>
-        <div style={{ display: 'flex', gap: 2 }}>
-          <button className="btn-icon" onClick={e => { e.stopPropagation(); onEdit(item); }} style={{ padding: 4 }}><EditIcon /></button>
-          <button className="btn-icon danger" onClick={e => { e.stopPropagation(); onDelete(item); }} style={{ padding: 4 }}><TrashIcon /></button>
+      {/* Durum badge */}
+      <span style={{
+        flexShrink: 0, fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+        background: 'rgba(245,158,11,0.12)', color: '#f59e0b', whiteSpace: 'nowrap',
+      }}>Potansiyel</span>
+
+      {/* İsim + yönetici */}
+      <div style={{ flex: '0 0 220px', minWidth: 0 }}>
+        <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
+        {mgr && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{mgr.firstName} {mgr.lastName}</div>}
+      </div>
+
+      {/* Olasılık bar */}
+      <div style={{ flex: '0 0 100px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Olasılık</span>
+          <span style={{ fontSize: 11, fontFamily: 'DM Mono, monospace', color: probColor(prob), fontWeight: 700 }}>%{prob}</span>
+        </div>
+        <div style={{ height: 4, background: 'var(--bg-hover)', borderRadius: 2, overflow: 'hidden' }}>
+          <div style={{ width: `${prob}%`, height: '100%', background: probColor(prob), borderRadius: 2 }} />
         </div>
       </div>
 
-      {/* Title */}
-      <div>
-        <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', marginBottom: 2 }}>{item.name}</div>
-        {mgr && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{mgr.firstName} {mgr.lastName}</div>}
-      </div>
-
-      {/* Probability bar */}
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Olasılık</span>
-          <span style={{ fontSize: 12, fontFamily: 'DM Mono, monospace', color: probColor(prob), fontWeight: 600 }}>%{prob}</span>
-        </div>
-        <div style={{ height: 5, background: 'var(--bg-hover)', borderRadius: 3, overflow: 'hidden' }}>
-          <div style={{ width: `${prob}%`, height: '100%', background: probColor(prob), borderRadius: 3 }} />
+      {/* Bütçe */}
+      <div style={{ flex: '0 0 140px', textAlign: 'right' }}>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 1 }}>Bütçe</div>
+        <div style={{ fontSize: 13, fontFamily: 'DM Mono, monospace', fontWeight: 600, color: 'var(--text-primary)' }}>
+          {fmt(item.budget)} <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{item.budgetCurrency || 'TRY'}</span>
         </div>
       </div>
 
-      {/* Amount boxes */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        {[
-          { label: 'Bütçe', value: fmt(item.budget), color: 'var(--text-primary)', currency: item.budgetCurrency || 'TRY' },
-          { label: 'Tahminlenen', value: fmt(estimated), color: '#34c97a', currency: item.budgetCurrency || 'TRY' },
-        ].map(box => (
-          <div key={box.label} style={{ padding: '8px 10px', background: 'var(--bg-secondary)', borderRadius: 8, border: '1px solid var(--border)' }}>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{box.label}</div>
-            <div style={{ fontSize: 14, fontFamily: 'DM Mono, monospace', fontWeight: 700, color: box.color }}>{box.value}</div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{box.currency}</div>
+      {/* Tahminlenen */}
+      <div style={{ flex: '0 0 140px', textAlign: 'right' }}>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 1 }}>Tahminlenen</div>
+        <div style={{ fontSize: 13, fontFamily: 'DM Mono, monospace', fontWeight: 600, color: '#34c97a' }}>
+          {fmt(estimated)} <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{item.budgetCurrency || 'TRY'}</span>
+        </div>
+      </div>
+
+      {/* Tarih & süre */}
+      <div style={{ flex: '0 0 160px' }}>
+        {item.startMonth && item.endMonth ? (
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'DM Mono, monospace' }}>
+            {MONTHS[item.startMonth - 1]} {item.startYear} → {MONTHS[item.endMonth - 1]} {item.endYear}
+            {dur && <span style={{ marginLeft: 6, padding: '1px 6px', borderRadius: 8, fontSize: 10, background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}>{dur} ay</span>}
           </div>
-        ))}
+        ) : <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>—</span>}
       </div>
 
-      {/* Tarih bilgisi */}
-      {item.startMonth && item.endMonth && (
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'DM Mono, monospace', display: 'flex', gap: 6, alignItems: 'center' }}>
-          <span>{MONTHS[item.startMonth - 1]} {item.startYear}</span>
-          <span style={{ opacity: 0.4 }}>→</span>
-          <span>{MONTHS[item.endMonth - 1]} {item.endYear}</span>
-          <span style={{ marginLeft: 4, padding: '1px 7px', borderRadius: 10, fontSize: 11, background: 'var(--bg-hover)', color: 'var(--text-secondary)' }}>
-            {computeDuration(item.startMonth, item.startYear, item.endMonth, item.endYear)} ay
-          </span>
-        </div>
-      )}
-
-      {/* Projeye Dönüştür */}
-      <button
-        onClick={async (e) => { e.stopPropagation(); setConverting(true); await onConvert(item); setConverting(false); }}
-        disabled={converting}
-        style={{
-          width: '100%', padding: '8px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-          cursor: 'pointer', border: '1px solid rgba(52,201,122,0.4)',
-          background: 'rgba(52,201,122,0.1)', color: '#34c97a',
-          fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s',
-        }}
-      >
-        {converting ? 'Güncelleniyor...' : '→ Projeye Dönüştür'}
-      </button>
+      {/* Aksiyonlar */}
+      <div style={{ marginLeft: 'auto', display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+        <button
+          onClick={async (e) => { e.stopPropagation(); setConverting(true); await onConvert(item); setConverting(false); }}
+          disabled={converting}
+          style={{
+            padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+            border: '1px solid rgba(52,201,122,0.4)', background: 'rgba(52,201,122,0.1)', color: '#34c97a',
+            fontFamily: 'DM Sans, sans-serif', whiteSpace: 'nowrap',
+          }}
+        >{converting ? '...' : '→ Dönüştür'}</button>
+        <button className="btn-icon" onClick={e => { e.stopPropagation(); onEdit(item); }} style={{ padding: 4 }}><EditIcon /></button>
+        <button className="btn-icon danger" onClick={e => { e.stopPropagation(); onDelete(item); }} style={{ padding: 4 }}><TrashIcon /></button>
+      </div>
     </div>
   );
 }
@@ -426,7 +401,7 @@ export default function SalesPage() {
           seniorities={seniorities}
           onBack={() => setSelectedProject(null)}
           onEdit={(p) => setEditing(p)}
-          onUpdate={load}
+          onUpdate={() => invalidate.projects()}
         />
         {editing && (
           <PotentialProjectModal
@@ -462,13 +437,22 @@ export default function SalesPage() {
         ))}
       </div>
 
-      {/* Cards grid */}
+      {/* Liste */}
       {potProjects.length === 0 ? (
         <div className="empty-state"><p>Potansiyel proje yok. "Yeni Proje" ile ekleyin veya projeler sayfasından "Potansiyele Taşı" butonunu kullanın.</p></div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+          {/* Başlık satırı */}
+          <div style={{ display: 'flex', gap: 12, padding: '8px 14px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
+            <span style={{ flex: '0 0 72px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--text-muted)' }}>Durum</span>
+            <span style={{ flex: '0 0 220px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--text-muted)' }}>Proje</span>
+            <span style={{ flex: '0 0 100px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--text-muted)' }}>Olasılık</span>
+            <span style={{ flex: '0 0 140px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--text-muted)', textAlign: 'right' }}>Bütçe</span>
+            <span style={{ flex: '0 0 140px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--text-muted)', textAlign: 'right' }}>Tahminlenen</span>
+            <span style={{ flex: '0 0 160px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--text-muted)' }}>Tarih Aralığı</span>
+          </div>
           {[...potProjects].sort((a, b) => (b.probability ?? 50) - (a.probability ?? 50)).map(item => (
-            <ProjectCard
+            <ProjectRow
               key={item.id}
               item={item}
               personnelMap={personnelMap}
@@ -485,7 +469,7 @@ export default function SalesPage() {
         <PotentialProjectModal
           project={editing?.id ? editing : null}
           personnel={personnel}
-          onSave={() => { setEditing(null); load(); }}
+          onSave={() => { setEditing(null); invalidate.projects(); }}
           onClose={() => setEditing(null)}
         />
       )}

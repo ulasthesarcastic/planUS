@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import SearchableSelect from '../SearchableSelect';
-import { useProjects, usePersonnel, useSeniorities, useOrganization, useProjectTypes } from '../../hooks/useQueries';
+import { useProjects, usePersonnel, useSeniorities, useOrganization, useProjectTypes, useAllProjectCosts } from '../../hooks/useQueries';
 
 const MONTHS_SHORT = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
 const MONTHS_FULL  = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
@@ -182,7 +182,17 @@ export default function BudgetPage() {
   const { data: seniorities = [] } = useSeniorities();
   const { data: orgUnits = [] } = useOrganization();
   const { data: projectTypes = [] } = useProjectTypes();
+  const { data: allCosts = [] } = useAllProjectCosts();
   const loading = loadingProjects;
+
+  // Proje başına gerçekleşen maliyet toplamı
+  const costsByProjectId = useMemo(() => {
+    const map = {};
+    for (const c of allCosts) {
+      map[c.projectId] = (map[c.projectId] || 0) + (Number(c.amount) || 0);
+    }
+    return map;
+  }, [allCosts]);
 
   const [selectedYear,   setSelectedYear]   = useState(currentYear);
   const [selectedProjectId, setSelectedProjectId] = useState('all');
@@ -306,11 +316,11 @@ export default function BudgetPage() {
           for (let m = analysisMonth; m <= 12; m++) {
             plannedCost += costs.planned[`${analysisYear}_${m}`] || 0;
           }
-          const remainingBudget = project.remainingBudget || 0;
+          const remainingBudget = (project.budget || 0) - (costsByProjectId[project.id] || 0);
           const potentialSales  = project.potentialSales  || 0;
           const totalAvailable  = remainingBudget + potentialSales;
           const diff = totalAvailable - plannedCost;
-          const hasData = remainingBudget > 0 || potentialSales > 0;
+          const hasData = (project.budget || 0) > 0 || potentialSales > 0;
           const status = !hasData ? '—' : diff >= 0 ? 'Yeterli' : 'Açık';
 
           // Eksiye düşüş — Toplam Pot. Kalan Bütçeye göre

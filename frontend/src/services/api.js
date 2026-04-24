@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { toastService } from './toastService';
 
 const API = axios.create({ baseURL: '/api' });
 
@@ -7,6 +8,38 @@ API.interceptors.request.use(config => {
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
+
+// ── Küresel hata yakalayıcı ───────────────────────────────────────────────────
+API.interceptors.response.use(
+  response => response,
+  error => {
+    const status = error.response?.status;
+    const data   = error.response?.data;
+
+    if (status === 401) {
+      // Token süresi dolmuş veya geçersiz → oturumu temizle
+      localStorage.removeItem('token');
+      window.location.reload();
+      return Promise.reject(error);
+    }
+
+    // Backend'den gelen özel hata mesajı: {"error": "..."} formatı (Spring Boot varsayılanı değil)
+    // Spring Boot varsayılan hata yanıtı "status" alanı içerir, özel hata yanıtlarımız içermez
+    const backendMsg = (data && !data.status) ? (data.error || data.message || null) : null;
+
+    const msg =
+      backendMsg                ? backendMsg
+      : status === 403          ? 'Bu işlem için yetkiniz yok.'
+      : status === 404          ? null   // 404 çoğunlukla beklenen durum
+      : status >= 500           ? 'Sunucu hatası oluştu. Lütfen tekrar deneyin.'
+      : !error.response         ? 'Sunucuya bağlanılamadı.'
+      : 'Bir hata oluştu.';
+
+    if (msg) toastService.error(msg);
+
+    return Promise.reject(error);
+  }
+);
 
 export const seniorityApi = {
   getAll: () => API.get('/seniorities'),
@@ -18,6 +51,8 @@ export const seniorityApi = {
 
 export const personnelApi = {
   getAll: () => API.get('/personnel'),
+  search: (q = '', { unitId, page = 0, size = 20 } = {}) =>
+    API.get('/personnel/search', { params: { q, unitId, page, size } }),
   getById: (id) => API.get(`/personnel/${id}`),
   create: (data) => API.post('/personnel', data),
   update: (id, data) => API.put(`/personnel/${id}`, data),
@@ -26,6 +61,8 @@ export const personnelApi = {
 
 export const projectApi = {
   getAll: () => API.get('/projects'),
+  getPaged: ({ categoryId, status, excludeStatus, page = 0, size = 24 } = {}) =>
+    API.get('/projects/paged', { params: { categoryId, status, excludeStatus, page, size } }),
   getById: (id) => API.get(`/projects/${id}`),
   create: (data) => API.post('/projects', data),
   update: (id, data) => API.put(`/projects/${id}`, data),
@@ -44,6 +81,11 @@ export const potentialSaleApi = {
   create: (data) => API.post('/potential-sales', data),
   update: (id, data) => API.put(`/potential-sales/${id}`, data),
   delete: (id) => API.delete(`/potential-sales/${id}`),
+  repairPaymentItems: () => API.post('/potential-sales/repair-payment-items'),
+};
+
+export const paymentItemApi = {
+  delete: (id) => API.delete(`/payment-items/${id}`),
 };
 
 export const organizationApi = {
@@ -68,6 +110,19 @@ export const projectTypeApi = {
   create: (data) => API.post('/project-types', data),
   update: (id, data) => API.put(`/project-types/${id}`, data),
   delete: (id) => API.delete(`/project-types/${id}`),
+};
+
+export const costTypeApi = {
+  getAll: () => API.get('/cost-types'),
+  create: (data) => API.post('/cost-types', data),
+  update: (id, data) => API.put(`/cost-types/${id}`, data),
+  delete: (id) => API.delete(`/cost-types/${id}`),
+};
+
+export const projectCostApi = {
+  getAll: () => API.get('/project-costs'),
+  getByProject: (projectId) => API.get(`/projects/${projectId}/costs`),
+  saveAll: (projectId, costs) => API.put(`/projects/${projectId}/costs`, costs),
 };
 
 export const projectCategoryApi = {

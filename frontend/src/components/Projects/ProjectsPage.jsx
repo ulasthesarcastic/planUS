@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
-import { projectApi, organizationApi, projectCategoryApi } from '../../services/api';
+import { useToast } from '../Toast/Toaster';
+import { projectApi, organizationApi, projectCategoryApi, potentialSaleApi, projectCostApi, paymentItemApi } from '../../services/api';
 import {
-  useProjects, usePersonnel, useProducts, useOrganization,
+  useProjects, useProjectsPaged, usePersonnel, useProducts, useOrganization,
   useSeniorities, usePotentialSales, useProjectTypes, useCategories,
-  useAllWorkflowSteps, useInvalidate,
+  useAllWorkflowSteps, useInvalidate, useCostTypes, useProjectCosts, useAllProjectCosts,
 } from '../../hooks/useQueries';
 import SearchableSelect from '../SearchableSelect';
+import PersonnelSearchSelect from '../PersonnelSearchSelect';
 
 const MONTHS = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran',
                  'Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
@@ -64,9 +66,9 @@ function fmtBudget(v) {
 // ── Planning helpers (from PlanningPage) ─────────────────────────────────────
 const MONTHS_PLAN = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
 const MONTHS_FULL = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
-const TYPES = ['need','planned','actual'];
-const TYPE_LABELS = { need: 'İht', planned: 'Pln', actual: 'Grc' };
-const TYPE_COLORS = { need: '#60a5fa', planned: '#a78bfa', actual: '#34d399' };
+const TYPES = ['need','planned'];
+const TYPE_LABELS = { need: 'İht', planned: 'Pln' };
+const TYPE_COLORS = { need: '#60a5fa', planned: '#a78bfa' };
 
 function getProjectMonths(project) {
   const months = [];
@@ -78,13 +80,13 @@ function getProjectMonths(project) {
   return months;
 }
 
-function fromDb(val, type) {
+function fromDb(val) {
   if (val == null) return null;
-  return type === 'actual' ? val : Math.round(val * 100);
+  return Math.round(val * 100);
 }
-function toDb(val, type) {
+function toDb(val) {
   if (val == null) return null;
-  return type === 'actual' ? val : val / 100;
+  return val / 100;
 }
 
 function getRateForMonth(rates, year, month) {
@@ -120,11 +122,11 @@ function analyzeBudget(project, personnelMap, seniorityMap) {
     monthlyCosts[key] = (monthlyCosts[key] || 0) + cost;
     plannedCost += cost;
   }
-  const remainingBudget = project.remainingBudget || 0;
-  const potentialSales  = project.potentialSales  || 0;
-  const totalAvailable  = remainingBudget + potentialSales;
+  const budget         = project.budget        || 0;
+  const potentialSales = project.potentialSales || 0;
+  const totalAvailable = budget + potentialSales;
   const diff = totalAvailable - plannedCost;
-  const hasData = remainingBudget > 0 || potentialSales > 0;
+  const hasData = budget > 0 || potentialSales > 0;
   let eksiyeAy = null;
   let cumCost = 0;
   for (let m = analysisMonth; m <= 12; m++) {
@@ -194,7 +196,6 @@ function BulkAssignModalPlanning({ person, project, onSave, onClose }) {
   const [eY, setEY] = useState(project.endYear);
   const [need, setNeed] = useState('');
   const [planned, setPlanned] = useState('');
-  const [actual, setActual] = useState('');
 
   const handleSave = () => {
     const updates = {};
@@ -203,7 +204,6 @@ function BulkAssignModalPlanning({ person, project, onSave, onClose }) {
       updates[`${person.id}_${y}_${m}`] = {
         need:    need    !== '' ? Math.min(100, Math.max(0, Number(need)))    : undefined,
         planned: planned !== '' ? Math.min(100, Math.max(0, Number(planned))) : undefined,
-        actual:  actual  !== '' ? Math.min(100, Math.max(0, Number(actual)))  : undefined,
       };
       m++; if (m > 12) { m = 1; y++; }
     }
@@ -235,8 +235,8 @@ function BulkAssignModalPlanning({ person, project, onSave, onClose }) {
             </div>
           ))}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 20 }}>
-          {[['need', need, setNeed], ['planned', planned, setPlanned], ['actual', actual, setActual]].map(([type, val, setter]) => (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+          {[['need', need, setNeed], ['planned', planned, setPlanned]].map(([type, val, setter]) => (
             <div key={type}>
               <div className="form-label" style={{ color: TYPE_COLORS[type] }}>{TYPE_LABELS[type]}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -283,9 +283,8 @@ function PlanningTab({ project, allPersonnel, units, seniorities, onReload }) {
     const map = {};
     for (const e of (project.resourcePlan || [])) {
       map[`${e.personnelId}_${e.year}_${e.month}`] = {
-        need:    fromDb(e.need,    'need'),
-        planned: fromDb(e.planned, 'planned'),
-        actual:  fromDb(e.actual,  'actual'),
+        need:    fromDb(e.need),
+        planned: fromDb(e.planned),
       };
     }
     setLocalPlan(map);
@@ -355,8 +354,8 @@ function PlanningTab({ project, allPersonnel, units, seniorities, onReload }) {
     const allEntries = { ...localPlan, [key]: updatedEntry };
     for (const [k, vals] of Object.entries(allEntries)) {
       const [p, yr, mo] = k.split('_');
-      if (vals.need != null || vals.planned != null || vals.actual != null) {
-        resourcePlan.push({ personnelId: p, year: +yr, month: +mo, need: toDb(vals.need,'need'), planned: toDb(vals.planned,'planned'), actual: toDb(vals.actual,'actual') });
+      if (vals.need != null || vals.planned != null) {
+        resourcePlan.push({ personnelId: p, year: +yr, month: +mo, need: toDb(vals.need), planned: toDb(vals.planned) });
       }
     }
     try { await projectApi.updateResourcePlan(localProject.id, resourcePlan); } catch (e) { console.error('Auto-save failed', e); }
@@ -368,15 +367,14 @@ function PlanningTab({ project, allPersonnel, units, seniorities, onReload }) {
       newPlan[key] = { ...newPlan[key] };
       if (vals.need    !== undefined) newPlan[key].need    = vals.need;
       if (vals.planned !== undefined) newPlan[key].planned = vals.planned;
-      if (vals.actual  !== undefined) newPlan[key].actual  = vals.actual;
     }
     setLocalPlan(newPlan);
     setBulkPerson(null);
     const resourcePlan = [];
     for (const [k, vals] of Object.entries(newPlan)) {
       const [p, yr, mo] = k.split('_');
-      if (vals.need != null || vals.planned != null || vals.actual != null) {
-        resourcePlan.push({ personnelId: p, year: +yr, month: +mo, need: toDb(vals.need,'need'), planned: toDb(vals.planned,'planned'), actual: toDb(vals.actual,'actual') });
+      if (vals.need != null || vals.planned != null) {
+        resourcePlan.push({ personnelId: p, year: +yr, month: +mo, need: toDb(vals.need), planned: toDb(vals.planned) });
       }
     }
     try { await projectApi.updateResourcePlan(localProject.id, resourcePlan); } catch (e) { console.error('Bulk auto-save failed', e); }
@@ -398,23 +396,19 @@ function PlanningTab({ project, allPersonnel, units, seniorities, onReload }) {
     }
     setLocalPlan(newPlan);
     setLocalProject(prev => ({ ...prev, personnelIds: newIds }));
-    setDeleteConfirm(null);
     try {
       await projectApi.updatePersonnel(localProject.id, newIds);
       const resourcePlan = [];
       for (const [k, vals] of Object.entries(newPlan)) {
         const [p, yr, mo] = k.split('_');
-        if (vals.need != null || vals.planned != null || vals.actual != null) {
-          resourcePlan.push({ personnelId: p, year: +yr, month: +mo, need: toDb(vals.need,'need'), planned: toDb(vals.planned,'planned'), actual: toDb(vals.actual,'actual') });
+        if (vals.need != null || vals.planned != null) {
+          resourcePlan.push({ personnelId: p, year: +yr, month: +mo, need: toDb(vals.need), planned: toDb(vals.planned) });
         }
       }
       await projectApi.updateResourcePlan(localProject.id, resourcePlan);
     } catch (e) { console.error('Delete resource failed', e); }
   };
 
-  const availablePersonnel = allPersonnel
-    .filter(p => !allGridPersonIds.has(String(p.id)))
-    .sort(sortName);
 
   const monthlyTotals = months.map(({ month, year }) => {
     let t = 0;
@@ -436,7 +430,7 @@ function PlanningTab({ project, allPersonnel, units, seniorities, onReload }) {
         {TYPES.map(t => (
           <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <div style={{ width: 8, height: 8, borderRadius: 2, background: TYPE_COLORS[t] }} />
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t === 'need' ? 'İhtiyaç' : t === 'planned' ? 'Planlanan' : 'Gerçekleşen'}</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t === 'need' ? 'İhtiyaç' : 'Planlanan'}</span>
           </div>
         ))}
         <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>{allGridPersonIds.size} kaynak</span>
@@ -447,9 +441,12 @@ function PlanningTab({ project, allPersonnel, units, seniorities, onReload }) {
       <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
         {addingResource ? (
           <>
-            <SearchableSelect
-              options={availablePersonnel.map(p => ({ value: p.id, label: `${p.firstName} ${p.lastName}` }))}
-              value="" onChange={handleAddResource} placeholder="Personel seçin..." style={{ minWidth: 240 }} />
+            <PersonnelSearchSelect
+              value=""
+              onChange={handleAddResource}
+              excludeIds={[...personnelIdSet]}
+              placeholder="Personel seçin..."
+              style={{ minWidth: 240 }} />
             <button onClick={() => setAddingResource(false)} style={{ padding: '4px 10px', borderRadius: 5, border: '1px solid var(--border)', background: 'var(--bg-hover)', cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)', fontFamily: 'DM Sans, sans-serif' }}>İptal</button>
           </>
         ) : (
@@ -470,8 +467,8 @@ function PlanningTab({ project, allPersonnel, units, seniorities, onReload }) {
               {months.map(({ month, year }) => {
                 const isCur = year === curYear && month === curMonth;
                 return (
-                  <th key={`${year}_${month}`} colSpan={3}
-                    style={{ padding: '6px 4px', textAlign: 'center', minWidth: COL_W * 3, borderBottom: '1px solid var(--border)', borderLeft: '1px solid var(--border)',
+                  <th key={`${year}_${month}`} colSpan={2}
+                    style={{ padding: '6px 4px', textAlign: 'center', minWidth: COL_W * 2, borderBottom: '1px solid var(--border)', borderLeft: '1px solid var(--border)',
                       color: isCur ? 'var(--accent)' : 'var(--text-secondary)', fontWeight: isCur ? 700 : 600, whiteSpace: 'nowrap', fontSize: 11,
                       background: isCur ? 'rgba(99,102,241,0.08)' : 'var(--bg-secondary)' }}>
                     {MONTHS_PLAN[month-1]} {year}
@@ -498,7 +495,7 @@ function PlanningTab({ project, allPersonnel, units, seniorities, onReload }) {
           </thead>
           <tbody>
             {!hasPersonnel ? (
-              <tr><td colSpan={months.length * 3 + 1} style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Henüz kaynak eklenmemiş.</td></tr>
+              <tr><td colSpan={months.length * 2 + 1} style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Henüz kaynak eklenmemiş.</td></tr>
             ) : (
               [
                 { key: 'enstitu',       label: 'Siber Güvenlik Enstitüsü',       people: grpEnstitu,      nameColor: 'var(--text-primary)' },
@@ -512,7 +509,7 @@ function PlanningTab({ project, allPersonnel, units, seniorities, onReload }) {
                     <td style={{ position: 'sticky', left: 0, zIndex: 2, padding: '8px 12px', fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: grp.nameColor, background: 'var(--bg-card)', borderTop: '2px solid var(--border)', borderBottom: '1px solid var(--border)', borderRight: '2px solid var(--border)', whiteSpace: 'nowrap', minWidth: NAME_W }}>
                       {grp.label} ({grp.people.length})
                     </td>
-                    <td colSpan={months.length * 3} style={{ background: 'rgba(255,255,255,0.06)', borderTop: '2px solid var(--border)', borderBottom: '1px solid var(--border)' }} />
+                    <td colSpan={months.length * 2} style={{ background: 'rgba(255,255,255,0.06)', borderTop: '2px solid var(--border)', borderBottom: '1px solid var(--border)' }} />
                   </tr>,
                   ...grp.people.map((person, pi) => (
                     <tr key={person.id} style={{ borderBottom: '1px solid var(--border)', background: pi % 2 === 0 ? 'transparent' : 'var(--bg-hover)' }}>
@@ -586,8 +583,8 @@ function PlanningTab({ project, allPersonnel, units, seniorities, onReload }) {
             { key: 'yes', label: 'Evet', primary: true },
           ]}
           onClose={action => {
+            setDeleteConfirm(null);
             if (action === 'yes') handleDeleteResource(deleteConfirm);
-            else setDeleteConfirm(null);
           }}
         />
       )}
@@ -596,9 +593,10 @@ function PlanningTab({ project, allPersonnel, units, seniorities, onReload }) {
 }
 
 // ── Project card with budget analysis coloring ───────────────────────────────
-function ProjectCard({ project, personnel, personnelMap, seniorityMap, categoryMap = {}, stepMap = {}, onClick, onEdit, onDelete, onMoveToPotensiyal }) {
+function ProjectCard({ project, personnel, personnelMap, seniorityMap, categoryMap = {}, stepMap = {}, costsByProjectId = {}, onClick, onEdit, onDelete, onMoveToPotensiyal }) {
   const mgr = personnel.find(p => String(p.id) === String(project.projectManagerId));
   const analysis = (personnelMap && seniorityMap) ? analyzeBudget(project, personnelMap, seniorityMap) : { status: 'nodata' };
+  const remainingBudget = (project.budget || 0) - (costsByProjectId[project.id] || 0);
   const isAcik = analysis.status === 'acik';
   const [hovered, setHovered] = useState(false);
   const [moving, setMoving] = useState(false);
@@ -671,10 +669,12 @@ function ProjectCard({ project, personnel, personnelMap, seniorityMap, categoryM
             <span style={{ color: '#34d399', fontWeight: 600, fontFamily: 'DM Mono, monospace' }}>{fmtBudget(project.budget)}</span>
           </div>
         )}
-        <div style={{ fontSize: 11 }}>
-          <span style={{ color: 'var(--text-secondary)' }}>Kalan: </span>
-          <span style={{ color: '#f97316', fontWeight: 600, fontFamily: 'DM Mono, monospace' }}>{fmtBudget(project.remainingBudget)}</span>
-        </div>
+        {project.budget > 0 && (
+          <div style={{ fontSize: 11 }}>
+            <span style={{ color: 'var(--text-secondary)' }}>Kalan: </span>
+            <span style={{ color: remainingBudget >= 0 ? '#f97316' : '#f87171', fontWeight: 600, fontFamily: 'DM Mono, monospace' }}>{fmtBudget(remainingBudget)}</span>
+          </div>
+        )}
         {project.potentialSales > 0 && (
           <div style={{ fontSize: 11 }}>
             <span style={{ color: 'var(--text-secondary)' }}>Potansiyel: </span>
@@ -709,7 +709,7 @@ function ProjectCard({ project, personnel, personnelMap, seniorityMap, categoryM
   );
 }
 
-function EmySectionProjects({ name, projects, personnel, personnelMap, seniorityMap, categoryMap, stepMap, onSelectProject, onEdit, onDelete, onMoveToPotensiyal, defaultOpen }) {
+function EmySectionProjects({ name, projects, personnel, personnelMap, seniorityMap, categoryMap, stepMap, costsByProjectId, onSelectProject, onEdit, onDelete, onMoveToPotensiyal, defaultOpen }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div style={{ marginBottom: 8, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
@@ -723,7 +723,7 @@ function EmySectionProjects({ name, projects, personnel, personnelMap, seniority
         <div style={{ padding: '12px 16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))', gap: 10 }}>
           {projects.map(p => (
             <ProjectCard key={p.id} project={p} personnel={personnel} personnelMap={personnelMap} seniorityMap={seniorityMap}
-              categoryMap={categoryMap} stepMap={stepMap}
+              categoryMap={categoryMap} stepMap={stepMap} costsByProjectId={costsByProjectId}
               onClick={() => onSelectProject(p)}
               onEdit={onEdit}
               onDelete={onDelete}
@@ -754,6 +754,7 @@ function MonthYearSelect({ month, year, onMonthChange, onYearChange, allowEmpty 
 // ── PROJE FORMU MODALI ──────────────────────────────────────────
 function ProjectModal({ project, personnel, projectTypes = [], categories = [], units = [], lockedCategoryId, onSave, onClose }) {
   const isEdit = !!project;
+  const toast = useToast();
   const [workflowSteps, setWorkflowSteps] = useState([]);
   const [form, setForm] = useState(project ? {
     name: project.name, customerName: project.customerName || '',
@@ -811,6 +812,7 @@ function ProjectModal({ project, personnel, projectTypes = [], categories = [], 
         });
         await projectApi.updateResourcePlan(project.id, filtered);
       }
+      toast.success(isEdit ? 'Proje güncellendi.' : 'Proje oluşturuldu.');
       onSave();
     } catch(e) { setError(e.response?.data?.error || 'Bir hata oluştu.'); }
     finally { setSaving(false); }
@@ -975,28 +977,24 @@ function ProjectModal({ project, personnel, projectTypes = [], categories = [], 
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">Proje Yöneticisi <span style={{color:'var(--text-muted)',fontWeight:400}}>(opsiyonel)</span></label>
-            <SearchableSelect
+            <PersonnelSearchSelect
               value={form.projectManagerId || ''}
               onChange={v => set('projectManagerId', v)}
+              initialLabel={(() => { const p = personnel.find(x => String(x.id) === String(form.projectManagerId)); return p ? `${p.firstName} ${p.lastName}` : ''; })()}
+              allowClear
+              clearLabel="— Seçilmedi —"
               placeholder="— Seçilmedi —"
-              style={{ width: '100%' }}
-              options={[
-                { value: '', label: '— Seçilmedi —' },
-                ...personnel.map(p => ({ value: String(p.id), label: `${p.firstName} ${p.lastName}` })),
-              ]}
             />
           </div>
           <div className="form-group">
             <label className="form-label">Teknik Lider <span style={{color:'var(--text-muted)',fontWeight:400}}>(opsiyonel)</span></label>
-            <SearchableSelect
+            <PersonnelSearchSelect
               value={form.techLeadId || ''}
               onChange={v => set('techLeadId', v)}
+              initialLabel={(() => { const p = personnel.find(x => String(x.id) === String(form.techLeadId)); return p ? `${p.firstName} ${p.lastName}` : ''; })()}
+              allowClear
+              clearLabel="— Seçilmedi —"
               placeholder="— Seçilmedi —"
-              style={{ width: '100%' }}
-              options={[
-                { value: '', label: '— Seçilmedi —' },
-                ...personnel.map(p => ({ value: String(p.id), label: `${p.firstName} ${p.lastName}` })),
-              ]}
             />
           </div>
         </div>
@@ -1126,6 +1124,7 @@ function PaymentTab({ project, onUpdate }) {
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
+  const invalidate = useInvalidate();
 
   const emptyPayment = () => ({
     id: crypto.randomUUID(), name: '', amount: '',
@@ -1168,9 +1167,13 @@ function PaymentTab({ project, onUpdate }) {
     setSaving(true);
     try {
       const res = await projectApi.getById(project.id);
-      const freshItems = (res.data.paymentPlan || []).filter(i => i.id !== id);
-      await projectApi.updatePaymentPlan(project.id, freshItems);
+      const freshItems = res.data.paymentPlan || [];
+      const deletedItem = freshItems.find(i => i.id === id);
+      const remaining = freshItems.filter(i => i.id !== id);
+      await projectApi.updatePaymentPlan(project.id, remaining);
       setDeleteId(null);
+      // Eğer silinen kalem bir siparişten geldiyse siparişler cache'ini güncelle
+      if (deletedItem?.sourceOrderId) invalidate.potentialSales();
       await onUpdate();
     } finally { setSaving(false); }
   };
@@ -1275,7 +1278,12 @@ function PaymentTab({ project, onUpdate }) {
                 <td style={{ padding:'11px 12px', fontSize:13.5 }}>
                   <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                     {item.completed && <span style={{ color:'var(--success)', fontSize:14 }}>✓</span>}
-                    <span style={{ textDecoration: item.completed ? 'none' : 'none', color:'var(--text-primary)' }}>{item.name}</span>
+                    <span style={{ color:'var(--text-primary)' }}>{item.name}</span>
+                    {item.sourceOrderId && (
+                      <span style={{ fontSize:10, fontWeight:600, padding:'2px 6px', borderRadius:10, background:'rgba(52,201,122,0.12)', color:'#34c97a', border:'1px solid rgba(52,201,122,0.3)', whiteSpace:'nowrap' }}>
+                        sipariş
+                      </span>
+                    )}
                   </div>
                 </td>
                 <td style={{ padding:'11px 12px', textAlign:'right', fontWeight:600, color:'var(--text-secondary)', fontFamily:'DM Mono, monospace', fontSize:13 }}>
@@ -1566,14 +1574,17 @@ function ProductsTab({ project, allProducts, onUpdate }) {
 
 // ── TAB 5: BÜTÇE ────────────────────────────────────────────────
 function BudgetTab({ project, onUpdate }) {
-  const [remainingBudget, setRemainingBudget] = useState(project.remainingBudget || 0);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [projectSales, setProjectSales] = useState([]);
+  const { data: rawCosts = [] } = useProjectCosts(project.id);
 
   const fmt = (n) => (n||0).toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   const totalBudget = project.budget || 0;
   const currency = project.budgetCurrency || 'TRY';
+
+  // Toplam gerçekleşen maliyet (Maliyetler sekmesinden)
+  const totalCosts = rawCosts.reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
+  // Kalan bütçe otomatik hesaplanır
+  const calculatedRemaining = totalBudget - totalCosts;
 
   useEffect(() => {
     import('../../services/api').then(({ potentialSaleApi }) => {
@@ -1584,18 +1595,12 @@ function BudgetTab({ project, onUpdate }) {
   const activeSales = projectSales.filter(s => s.status === 'AKTIF');
   const potentialTotal = activeSales.reduce((sum, s) => sum + (s.amount * s.probability / 100), 0);
 
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      await projectApi.updateBudget(project.id, {
-        remainingBudget: parseFloat(remainingBudget) || 0,
-        potentialSales: potentialTotal,
-      });
-      await onUpdate();
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } finally { setSaving(false); }
-  };
+  // Potansiyel satışı DB'ye otomatik yaz (değişince)
+  useEffect(() => {
+    projectApi.updateBudget(project.id, {
+      potentialSales: potentialTotal,
+    }).catch(() => {});
+  }, [potentialTotal]); // eslint-disable-line
 
   const STATUS_COLORS = { AKTIF: '#4f8ef7', KAZANILDI: '#34c97a', KAYBEDILDI: '#f05c5c' };
   const STATUS_LABELS = { AKTIF: 'Aktif', KAZANILDI: 'Kazanıldı', KAYBEDILDI: 'Kaybedildi' };
@@ -1614,13 +1619,22 @@ function BudgetTab({ project, onUpdate }) {
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Proje bilgilerinden güncellenir</div>
         </div>
 
-        {/* Kalan Bütçe */}
-        <div className="form-group">
-          <label className="form-label">Kalan Bütçe ({currency})</label>
-          <AmountInput value={remainingBudget} onChange={setRemainingBudget} />
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-            Kullanılan: {fmt(totalBudget - (parseFloat(remainingBudget) || 0))} {currency}
+        {/* Gerçekleşen Maliyet */}
+        <div style={{ padding: '16px 20px', background: 'var(--bg-secondary)', borderRadius: 10, border: '1px solid var(--border)' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--text-muted)', marginBottom: 6 }}>Gerçekleşen Maliyet</div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: '#f97316', fontFamily: 'DM Mono, monospace' }}>
+            {fmt(totalCosts)} <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>{currency}</span>
           </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Maliyetler sekmesinden otomatik hesaplanır</div>
+        </div>
+
+        {/* Kalan Bütçe — otomatik */}
+        <div style={{ padding: '16px 20px', background: 'var(--bg-secondary)', borderRadius: 10, border: `1px solid ${calculatedRemaining >= 0 ? 'var(--border)' : '#f87171'}` }}>
+          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--text-muted)', marginBottom: 6 }}>Kalan Bütçe</div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: calculatedRemaining >= 0 ? '#22c55e' : '#f87171', fontFamily: 'DM Mono, monospace' }}>
+            {fmt(calculatedRemaining)} <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>{currency}</span>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Toplam Bütçe − Gerçekleşen Maliyet</div>
         </div>
 
         {/* Potansiyel Satış - otomatik */}
@@ -1656,11 +1670,256 @@ function BudgetTab({ project, onUpdate }) {
           )}
         </div>
 
-        <button className="btn btn-primary" onClick={handleSave} disabled={saving}
-          style={{ alignSelf: 'flex-start' }}>
-          {saving ? 'Kaydediliyor...' : saved ? '✓ Kaydedildi' : 'Kaydet'}
-        </button>
       </div>
+    </div>
+  );
+}
+
+// ── MALİYET TAB ──────────────────────────────────────────────────
+function AmountCostInput({ value, onChange }) {
+  const toDisplay = v => (v != null && v !== '' && !isNaN(Number(v))) ? Number(v).toLocaleString('tr-TR') : '';
+  const [display, setDisplay] = useState(toDisplay(value));
+  useEffect(() => { setDisplay(toDisplay(value)); }, [value]);
+
+  const handleChange = e => {
+    const raw = e.target.value.replace(/\./g, '').replace(/[^0-9]/g, '');
+    if (raw === '') { setDisplay(''); onChange(null); return; }
+    const num = Number(raw);
+    setDisplay(num.toLocaleString('tr-TR'));
+    onChange(num);
+  };
+
+  return (
+    <input
+      value={display}
+      onChange={handleChange}
+      onFocus={e => e.target.select()}
+      onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
+      style={{ width: '100%', textAlign: 'right', fontSize: 12, background: 'transparent', border: 'none',
+               outline: 'none', color: display ? 'var(--text-primary)' : 'var(--text-muted)',
+               fontFamily: 'DM Mono, monospace', padding: '4px 6px' }}
+      placeholder="—"
+    />
+  );
+}
+
+function CostsTab({ project, onReload }) {
+  const { data: allCostTypes = [] } = useCostTypes();
+  const { data: rawCosts = [], isLoading } = useProjectCosts(project.id);
+
+  // localCosts: { [costTypeId_year_month]: amount }
+  const [localCosts, setLocalCosts] = useState({});
+  // activeTypeIds: Set of costTypeIds that have a row in the matrix
+  const [activeTypeIds, setActiveTypeIds] = useState(new Set());
+  const [addingType, setAddingType] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const savingRef  = useRef(false);
+  const pendingRef = useRef(null);
+
+  useEffect(() => {
+    const map = {};
+    const ids = new Set();
+    for (const c of rawCosts) {
+      map[`${c.costTypeId}_${c.year}_${c.month}`] = Number(c.amount);
+      ids.add(c.costTypeId);
+    }
+    setLocalCosts(map);
+    setActiveTypeIds(ids);
+  }, [rawCosts]);
+
+  const months = getProjectMonths(project);
+  const typeMap = Object.fromEntries(allCostTypes.map(t => [t.id, t]));
+  const activeTypes = [...activeTypeIds].map(id => typeMap[id]).filter(Boolean);
+  const availableTypes = allCostTypes.filter(t => !activeTypeIds.has(t.id));
+
+  const getVal = (typeId, year, month) => localCosts[`${typeId}_${year}_${month}`] ?? null;
+
+  const setVal = (typeId, year, month, amount) => {
+    setLocalCosts(prev => ({ ...prev, [`${typeId}_${year}_${month}`]: amount }));
+  };
+
+  const save = async (updatedCosts) => {
+    if (savingRef.current) { pendingRef.current = updatedCosts; return; }
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      const payload = [];
+      for (const [key, amount] of Object.entries(updatedCosts)) {
+        if (amount != null && amount > 0) {
+          const parts = key.split('_');
+          const month = Number(parts.pop());
+          const year  = Number(parts.pop());
+          const costTypeId = parts.join('_');
+          payload.push({ costTypeId, year, month, amount });
+        }
+      }
+      await projectCostApi.saveAll(project.id, payload);
+    } catch (e) { console.error('Cost save failed', e); }
+    finally {
+      savingRef.current = false;
+      setSaving(false);
+      if (pendingRef.current) {
+        const next = pendingRef.current;
+        pendingRef.current = null;
+        save(next);
+      }
+    }
+  };
+
+  const handleCellBlur = (typeId, year, month, amount) => {
+    const key = `${typeId}_${year}_${month}`;
+    const updated = { ...localCosts, [key]: amount };
+    setLocalCosts(updated);
+    save(updated);
+  };
+
+  const addCostType = (typeId) => {
+    setActiveTypeIds(prev => new Set([...prev, typeId]));
+    setAddingType(false);
+  };
+
+  const removeCostType = (typeId) => {
+    const updated = { ...localCosts };
+    for (const key of Object.keys(updated)) {
+      if (key.startsWith(`${typeId}_`)) delete updated[key];
+    }
+    setLocalCosts(updated);
+    setActiveTypeIds(prev => { const next = new Set(prev); next.delete(typeId); return next; });
+    save(updated);
+  };
+
+  // Row total
+  const rowTotal = (typeId) => months.reduce((s, {month, year}) => s + (getVal(typeId, year, month) || 0), 0);
+  // Col total
+  const colTotal = (year, month) => activeTypes.reduce((s, t) => s + (getVal(t.id, year, month) || 0), 0);
+  const grandTotal = activeTypes.reduce((s, t) => s + rowTotal(t.id), 0);
+
+  const fmtMoney = v => v ? v.toLocaleString('tr-TR') : '—';
+
+  const NAME_W = 160;
+  const COL_W  = 100;
+
+  if (isLoading) return <div style={{ padding: 24, color: 'var(--text-muted)' }}>Yükleniyor...</div>;
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+        <span style={{ fontSize: 13, color: 'var(--text-muted)', flex: 1 }}>
+          {saving ? 'Kaydediliyor…' : activeTypes.length > 0 ? `${activeTypes.length} maliyet kalemi · Toplam: ${fmtMoney(grandTotal)} ${project.budgetCurrency || '₺'}` : 'Maliyet kalemi yok'}
+        </span>
+        {availableTypes.length > 0 && (
+          <div style={{ position: 'relative' }}>
+            <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setAddingType(v => !v)}>
+              + Maliyet Kalemi Ekle
+            </button>
+            {addingType && (
+              <div style={{ position: 'absolute', top: 'calc(100% + 4px)', right: 0, background: 'var(--bg-card)',
+                            border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                            zIndex: 50, minWidth: 180, overflow: 'hidden' }}>
+                {availableTypes.map(t => (
+                  <div key={t.id} onMouseDown={() => addCostType(t.id)}
+                    style={{ padding: '9px 14px', fontSize: 13, cursor: 'pointer', color: 'var(--text-primary)' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                    {t.name}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {activeTypes.length === 0 ? (
+        <div className="empty-state" style={{ padding: '32px 0' }}>
+          <p>Henüz maliyet kalemi yok. "Maliyet Kalemi Ekle" ile başlayın.</p>
+          <p style={{ fontSize: 12 }}>Maliyet tiplerini Ayarlar → Maliyet Tipleri'nden yönetebilirsiniz.</p>
+        </div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ borderCollapse: 'collapse', fontSize: 12, minWidth: NAME_W + months.length * COL_W + 80 }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                <th style={{ width: NAME_W, minWidth: NAME_W, textAlign: 'left', padding: '6px 10px',
+                             position: 'sticky', left: 0, background: 'var(--bg-card)', zIndex: 2,
+                             fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>
+                  Maliyet Tipi
+                </th>
+                {months.map(({ month, year }) => (
+                  <th key={`${year}_${month}`}
+                    style={{ width: COL_W, textAlign: 'center', padding: '6px 4px',
+                             fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>
+                    {MONTHS_PLAN[month-1]}<br/>
+                    <span style={{ fontSize: 10, fontWeight: 400 }}>{year}</span>
+                  </th>
+                ))}
+                <th style={{ width: 80, textAlign: 'right', padding: '6px 10px',
+                             fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>
+                  Toplam
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {activeTypes.map((costType, ri) => (
+                <tr key={costType.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                  <td style={{ padding: '4px 10px', position: 'sticky', left: 0, background: 'var(--bg-card)', zIndex: 1,
+                               display: 'flex', alignItems: 'center', gap: 6, minHeight: 36 }}>
+                    <span style={{ flex: 1, fontWeight: 500, color: 'var(--text-primary)' }}>{costType.name}</span>
+                    <button onClick={() => removeCostType(costType.id)} title="Kaldır"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)',
+                               padding: '2px 4px', fontSize: 14, lineHeight: 1, opacity: 0.6 }}>×</button>
+                  </td>
+                  {months.map(({ month, year }) => {
+                    const v = getVal(costType.id, year, month);
+                    return (
+                      <td key={`${year}_${month}`}
+                        style={{ padding: 0, borderLeft: '1px solid var(--border)',
+                                 background: v ? `rgba(96,165,250,0.06)` : 'transparent' }}>
+                        <AmountCostInput
+                          value={v}
+                          onChange={amount => {
+                            const key = `${costType.id}_${year}_${month}`;
+                            const updated = { ...localCosts, [key]: amount };
+                            setLocalCosts(updated);
+                            save(updated);
+                          }}
+                        />
+                      </td>
+                    );
+                  })}
+                  <td style={{ padding: '4px 10px', textAlign: 'right', fontFamily: 'DM Mono, monospace',
+                               fontWeight: 600, color: 'var(--accent)', whiteSpace: 'nowrap' }}>
+                    {fmtMoney(rowTotal(costType.id))}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr style={{ borderTop: '2px solid var(--border)', background: 'var(--bg-secondary)' }}>
+                <td style={{ padding: '6px 10px', position: 'sticky', left: 0, background: 'var(--bg-secondary)',
+                             fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                  Toplam
+                </td>
+                {months.map(({ month, year }) => {
+                  const t = colTotal(year, month);
+                  return (
+                    <td key={`${year}_${month}`}
+                      style={{ padding: '6px 4px', textAlign: 'right', borderLeft: '1px solid var(--border)',
+                               fontFamily: 'DM Mono, monospace', fontSize: 11,
+                               color: t > 0 ? 'var(--text-primary)' : 'var(--text-muted)', paddingRight: 8 }}>
+                      {t > 0 ? fmtMoney(t) : '—'}
+                    </td>
+                  );
+                })}
+                <td style={{ padding: '6px 10px', textAlign: 'right', fontFamily: 'DM Mono, monospace',
+                             fontWeight: 700, color: 'var(--accent)' }}>
+                  {fmtMoney(grandTotal)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -1669,11 +1928,12 @@ function BudgetTab({ project, onUpdate }) {
 export function ProjectDetail({ project, allPersonnel, allProducts, units, seniorities, onBack, onEdit, onUpdate }) {
   const [activeTab, setActiveTab] = useState('planning');
   const tabs = [
-    { id:'planning', label:'Planlama' },
-    { id:'payment', label:'Ödeme Planı' },
+    { id:'planning',   label:'Planlama' },
+    { id:'payment',    label:'Ödeme Planı' },
     { id:'milestones', label:'Kilometre Taşları' },
-    { id:'products', label:'Ürünler' },
-    { id:'budget', label:'Bütçe' },
+    { id:'products',   label:'Ürünler' },
+    { id:'budget',     label:'Bütçe' },
+    { id:'costs',      label:'Maliyetler' },
   ];
   const projectAmount = (project.paymentPlan||[]).reduce((s,i) => s+(i.amount||0), 0);
 
@@ -1700,6 +1960,18 @@ export function ProjectDetail({ project, allPersonnel, allProducts, units, senio
             {fmt(projectAmount)} {project.budgetCurrency}
           </div>
         </div>
+        <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:2, marginRight:4 }}>
+          {project.updatedBy && (
+            <span style={{ fontSize:11, color:'var(--text-muted)' }}>
+              Son güncelleme: <strong style={{ color:'var(--text-secondary)' }}>{project.updatedBy}</strong>
+            </span>
+          )}
+          {project.updatedAt && (
+            <span style={{ fontSize:11, color:'var(--text-muted)', fontFamily:'DM Mono, monospace' }}>
+              {new Date(project.updatedAt).toLocaleString('tr-TR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })}
+            </span>
+          )}
+        </div>
         <button className="btn btn-ghost" onClick={() => onEdit(project)}><EditIcon /> Düzenle</button>
       </div>
 
@@ -1722,17 +1994,31 @@ export function ProjectDetail({ project, allPersonnel, allProducts, units, senio
         {activeTab==='milestones' && <MilestonesTab project={project} onUpdate={onUpdate} />}
         {activeTab==='products' && <ProductsTab project={project} allProducts={allProducts} onUpdate={onUpdate} />}
         {activeTab==='budget' && <BudgetTab project={project} onUpdate={onUpdate} />}
+        {activeTab==='costs' && <CostsTab project={project} onReload={onUpdate} />}
       </div>
     </div>
   );
 }
+
+const PAGE_SIZE = 24;
 
 // ── ANA SAYFA ────────────────────────────────────────────────────
 export default function ProjectsPage({ categoryId: propCategoryId }) {
   const { user } = useAuth();
   const filterKey = user ? `projects_filter_${user.username}` : 'projects_filter';
 
-  const { data: projects = [], isLoading: projLoading, refetch: refetchProjects } = useProjects();
+  // Kategori modunda: sadece o kategorinin projeleri sayfalandırılmış gelir
+  // Normal modda: tüm projeler tek seferde gelir (proje yönetimi sayfası)
+  const [page, setPage] = useState(0);
+  const { data: projects = [], isLoading: projLoading, refetch: refetchProjects } =
+    useProjects({ enabled: !propCategoryId });
+  const { data: pagedData, isLoading: pagedLoading, isFetching: pagedFetching, refetch: refetchPaged } =
+    useProjectsPaged(propCategoryId, page, PAGE_SIZE);
+
+  const pagedProjects  = pagedData?.content      ?? [];
+  const totalPages     = pagedData?.totalPages    ?? 0;
+  const totalElements  = pagedData?.totalElements ?? 0;
+
   const { data: personnel = [] }       = usePersonnel();
   const { data: products = [] }        = useProducts();
   const { data: units = [] }           = useOrganization();
@@ -1742,8 +2028,12 @@ export default function ProjectsPage({ categoryId: propCategoryId }) {
   const { data: categoriesRaw = [] }   = useCategories();
   const categories = [...categoriesRaw].sort((a, b) => a.stepOrder - b.stepOrder);
   const { data: allSteps = [] }        = useAllWorkflowSteps(categories);
+  const { data: allCosts = [] }        = useAllProjectCosts();
   const invalidate                     = useInvalidate();
-  const loading = projLoading;
+  const toast                          = useToast();
+
+  const loading = propCategoryId ? pagedLoading : projLoading;
+
   const [selectedProject, setSelectedProject] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -1753,37 +2043,52 @@ export default function ProjectsPage({ categoryId: propCategoryId }) {
   const location = useLocation();
   const [pendingOpenId, setPendingOpenId] = useState(null);
 
-  // Navigasyon değişince: SalesPage'den geliyorsa projeyi aç, yoksa sıfırla
+  // Navigasyon değişince: SalesPage'den geliyorsa projeyi aç, sidebar'dan geliyorsa sıfırla
   useEffect(() => {
     if (location.state?.openProjectId) {
       setPendingOpenId(location.state.openProjectId);
       setSelectedProject(null);
-    } else {
+    } else if (location.state?.fromSidebar) {
       setPendingOpenId(null);
       setSelectedProject(null);
     }
+    // Diğer navigasyonlarda (modal aç/kapa, tab değiştir vb.) selectedProject korunur
   }, [location.key]);
 
   // Projeler yüklenince bekleyen ID varsa aç
   useEffect(() => {
-    if (pendingOpenId && projects.length > 0) {
+    if (!pendingOpenId) return;
+    if (propCategoryId) {
+      // Kategori modunda: ID'ye göre direkt çek
+      projectApi.getById(pendingOpenId).then(res => {
+        if (res?.data) { setSelectedProject(res.data); setPendingOpenId(null); }
+      });
+    } else if (projects.length > 0) {
       const proj = projects.find(p => p.id === pendingOpenId);
       if (proj) { setSelectedProject(proj); setPendingOpenId(null); }
     }
-  }, [pendingOpenId, projects]);
+  }, [pendingOpenId, projects, propCategoryId]);
 
   const personnelMap = Object.fromEntries(personnel.map(p => [String(p.id), p]));
   const seniorityMap = Object.fromEntries(seniorities.map(s => [String(s.id), s]));
   const categoryMap  = Object.fromEntries(categories.map(c => [String(c.id), c]));
   const stepMap      = Object.fromEntries(allSteps.map(s => [String(s.id), s]));
 
-
-  // Seçili projeyi cache'i geçersiz kılıp taze çeker
+  // Seçili projeyi taze verilerle günceller
   const refreshSelected = async () => {
-    const res = await refetchProjects();
-    if (selectedProject && res.data) {
-      const fresh = res.data.find(p => p.id === selectedProject.id);
-      if (fresh) setSelectedProject(fresh);
+    if (propCategoryId) {
+      // Kategori modunda: ID'ye göre tazele + paged listeyi de yenile
+      if (selectedProject) {
+        const res = await projectApi.getById(selectedProject.id);
+        if (res?.data) setSelectedProject(res.data);
+      }
+      refetchPaged();
+    } else {
+      const res = await refetchProjects();
+      if (selectedProject && res.data) {
+        const fresh = res.data.find(p => p.id === selectedProject.id);
+        if (fresh) setSelectedProject(fresh);
+      }
     }
   };
 
@@ -1797,6 +2102,7 @@ export default function ProjectsPage({ categoryId: propCategoryId }) {
     setDeleteConfirm(null);
     setSelectedProject(null);
     invalidate.projects();
+    toast.success('Proje silindi.');
   };
 
   const handleMoveToPotensiyal = async (project) => {
@@ -1818,7 +2124,7 @@ export default function ProjectsPage({ categoryId: propCategoryId }) {
           allProducts={products}
           units={units}
           seniorities={seniorities}
-          onBack={() => { setSelectedProject(null); load(); }}
+          onBack={() => setSelectedProject(null)}
           onEdit={(p) => { setEditing(p || selectedProject); setModalOpen(true); }}
           onUpdate={refreshSelected}
         />
@@ -1831,6 +2137,12 @@ export default function ProjectsPage({ categoryId: propCategoryId }) {
     );
   }
 
+  // Proje başına gerçekleşen maliyet toplamı (kalan bütçe hesabı için)
+  const costsByProjectId = {};
+  for (const c of allCosts) {
+    costsByProjectId[c.projectId] = (costsByProjectId[c.projectId] || 0) + (Number(c.amount) || 0);
+  }
+
   // Compute per-project potential sales from live data (active sales only)
   const potentialMap = {};
   for (const s of potentialSalesAll) {
@@ -1839,18 +2151,20 @@ export default function ProjectsPage({ categoryId: propCategoryId }) {
       potentialMap[pid] = (potentialMap[pid] || 0) + (s.amount * s.probability / 100);
     }
   }
-  // Enrich projects with dynamically calculated potentialSales
-  // POTANSIYEL statüsündeki projeler sadece Potansiyel Projeler sayfasında görünür
-  // Kategori sayfasındaysa yalnızca o kategorideki projeler listelenir
-  const enrichedProjects = projects
-    .filter(p => !p.projectStatus || p.projectStatus !== 'POTANSIYEL')
-    .filter(p => !propCategoryId || String(p.categoryId) === String(propCategoryId))
-    .map(p => ({ ...p, potentialSales: potentialMap[String(p.id)] || 0 }));
 
+  // Kategori modunda: sayfalı veri (backend zaten filtrelemiş)
+  // Normal modda: tüm projeler client-side filtrelenir (POTANSIYEL hariç)
+  const enrichedProjects = propCategoryId
+    ? pagedProjects.map(p => ({ ...p, potentialSales: potentialMap[String(p.id)] || 0 }))
+    : projects
+        .filter(p => !p.projectStatus || p.projectStatus !== 'POTANSIYEL')
+        .map(p => ({ ...p, potentialSales: potentialMap[String(p.id)] || 0 }));
+
+  // Tür filtreleme sayaçları — kategori modunda sayfa içi sayılar gösterilir
   const counts = Object.fromEntries(
     projectTypes.map(t => [t.id, enrichedProjects.filter(p => p.projectType === t.id).length])
   );
-  counts.ALL = enrichedProjects.length;
+  counts.ALL = propCategoryId ? totalElements : enrichedProjects.length;
 
   const filtered = typeFilter === 'ALL' ? enrichedProjects : enrichedProjects.filter(p => p.projectType === typeFilter);
   const unitMap  = Object.fromEntries(units.map(u => [String(u.id), u]));
@@ -1883,6 +2197,7 @@ export default function ProjectsPage({ categoryId: propCategoryId }) {
           seniorityMap={seniorityMap}
           categoryMap={categoryMap}
           stepMap={stepMap}
+          costsByProjectId={costsByProjectId}
           onSelectProject={setSelectedProject}
           onEdit={p => { setEditing(p); setModalOpen(true); }}
           onDelete={p => setDeleteConfirm(p)}
@@ -1896,7 +2211,7 @@ export default function ProjectsPage({ categoryId: propCategoryId }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))', gap: 10 }}>
         {sorted.map(p => (
           <ProjectCard key={p.id} project={p} personnel={personnel} personnelMap={personnelMap} seniorityMap={seniorityMap}
-            categoryMap={categoryMap} stepMap={stepMap}
+            categoryMap={categoryMap} stepMap={stepMap} costsByProjectId={costsByProjectId}
             onClick={() => setSelectedProject(p)}
             onEdit={proj => { setEditing(proj); setModalOpen(true); }}
             onDelete={proj => setDeleteConfirm(proj)}
@@ -1940,8 +2255,52 @@ export default function ProjectsPage({ categoryId: propCategoryId }) {
         <div className="loading">Yükleniyor...</div>
       ) : filtered.length === 0 ? (
         <div className="empty-state"><p>Bu tipte proje yok.</p></div>
-      ) : renderProjectCards()
-      }
+      ) : (
+        <>
+          {pagedFetching && propCategoryId && (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>Güncelleniyor…</div>
+          )}
+          {renderProjectCards()}
+
+          {/* Sayfalama — sadece kategori modunda, birden fazla sayfa varsa */}
+          {propCategoryId && totalPages > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 24 }}>
+              <button
+                className="btn btn-ghost"
+                disabled={page === 0}
+                onClick={() => setPage(p => p - 1)}
+                style={{ padding: '6px 14px', fontSize: 12, opacity: page === 0 ? 0.4 : 1 }}
+              >
+                ← Önceki
+              </button>
+              <div style={{ display: 'flex', gap: 4 }}>
+                {Array.from({ length: totalPages }, (_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setPage(i)}
+                    style={{
+                      width: 30, height: 30, borderRadius: 6, fontSize: 12, fontWeight: 600,
+                      border: '1px solid var(--border)', cursor: 'pointer', fontFamily: 'DM Mono, monospace',
+                      background: i === page ? 'var(--accent)' : 'var(--bg-secondary)',
+                      color: i === page ? '#fff' : 'var(--text-secondary)',
+                    }}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+              </div>
+              <button
+                className="btn btn-ghost"
+                disabled={page >= totalPages - 1}
+                onClick={() => setPage(p => p + 1)}
+                style={{ padding: '6px 14px', fontSize: 12, opacity: page >= totalPages - 1 ? 0.4 : 1 }}
+              >
+                Sonraki →
+              </button>
+            </div>
+          )}
+        </>
+      )}
 
       {modalOpen && (
         <ProjectModal project={editing} personnel={personnel} projectTypes={projectTypes} categories={categories}

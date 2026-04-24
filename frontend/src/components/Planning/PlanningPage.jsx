@@ -87,11 +87,11 @@ function analyzeBudget(project, personnelMap, seniorityMap) {
     plannedCost += cost;
   }
 
-  const remainingBudget = project.remainingBudget || 0;
-  const potentialSales  = project.potentialSales  || 0;
-  const totalAvailable  = remainingBudget + potentialSales;
+  const budget         = project.budget        || 0;
+  const potentialSales = project.potentialSales || 0;
+  const totalAvailable = budget + potentialSales;
   const diff = totalAvailable - plannedCost;
-  const hasData = remainingBudget > 0 || potentialSales > 0;
+  const hasData = budget > 0 || potentialSales > 0;
 
   // Deficit month calculation
   let eksiyeAy = null;
@@ -713,10 +713,6 @@ function ProjectCard({ project, personnel, personnelMap, seniorityMap, onClick }
         <div style={{ fontSize: 11 }}>
           <span style={{ color: 'var(--text-secondary)' }}>Bütçe: </span>
           <span style={{ color: '#34d399', fontWeight: 600, fontFamily: 'DM Mono, monospace' }}>{fmtBudget(project.budget)}</span>
-        </div>
-        <div style={{ fontSize: 11 }}>
-          <span style={{ color: 'var(--text-secondary)' }}>Kalan: </span>
-          <span style={{ color: '#f97316', fontWeight: 600, fontFamily: 'DM Mono, monospace' }}>{fmtBudget(project.remainingBudget)}</span>
         </div>
         <div style={{ fontSize: 11 }}>
           <span style={{ color: 'var(--text-secondary)' }}>Potansiyel: </span>

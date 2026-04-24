@@ -31,6 +31,12 @@ public class JwtFilter extends OncePerRequestFilter {
                 var auth = new UsernamePasswordAuthenticationToken(
                     username, null, List.of(new SimpleGrantedAuthority("ROLE_" + role)));
                 SecurityContextHolder.getContext().setAuthentication(auth);
+            } else {
+                // Token mevcut ama geçersiz/süresi dolmuş → 401 döndür
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.setContentType("application/json");
+                response.getWriter().write("{\"error\":\"Token süresi dolmuş, lütfen tekrar giriş yapın.\"}");
+                return;
             }
         }
         chain.doFilter(request, response);

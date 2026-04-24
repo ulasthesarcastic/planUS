@@ -5,6 +5,7 @@ import com.projectmanager.model.ResourceEntry;
 import com.projectmanager.model.PaymentItem;
 import com.projectmanager.model.Project;
 import com.projectmanager.service.ProjectService;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,6 +24,18 @@ public class ProjectController {
 
     @GetMapping
     public List<Project> getAll() { return projectService.getAll(); }
+
+    // Sayfalı endpoint — kategori sayfaları için
+    // GET /api/projects/paged?page=0&size=24&categoryId=xxx&excludeStatus=POTANSIYEL
+    @GetMapping("/paged")
+    public Page<Project> getPaged(
+            @RequestParam(defaultValue = "0")  int page,
+            @RequestParam(defaultValue = "24") int size,
+            @RequestParam(required = false) String categoryId,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String excludeStatus) {
+        return projectService.getPaged(page, size, categoryId, status, excludeStatus);
+    }
 
     @GetMapping("/{id}")
     public ResponseEntity<?> getById(@PathVariable String id) {
@@ -81,9 +94,8 @@ public class ProjectController {
     }
     @PutMapping("/{id}/budget")
     public ResponseEntity<?> updateBudget(@PathVariable String id, @RequestBody Map<String, Double> body) {
-        double remaining = body.getOrDefault("remainingBudget", 0.0);
         double potential = body.getOrDefault("potentialSales", 0.0);
-        return projectService.updateBudget(id, remaining, potential)
+        return projectService.updateBudget(id, potential)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }

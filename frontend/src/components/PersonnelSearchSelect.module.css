@@ -1,0 +1,92 @@
+.container {
+  position: relative;
+  width: 100%;
+}
+
+.inputWrapper {
+  position: relative;
+}
+
+.input {
+  /* form-input stillerini miras alır, ek overrides */
+  cursor: pointer;
+  padding-right: 28px;
+}
+
+.input:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.chevron {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--text-muted);
+  transition: transform 0.15s;
+}
+
+.chevronOpen {
+  transform: translateY(-50%) rotate(180deg);
+}
+
+/* Dropdown */
+.dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.clearOption {
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  font-family: 'DM Sans', sans-serif;
+  transition: background 0.1s;
+}
+
+.clearOption:hover {
+  background: var(--bg-hover);
+}
+
+.message {
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+  font-family: 'DM Sans', sans-serif;
+}
+
+.option {
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text-primary);
+  background: transparent;
+  transition: background 0.1s;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.option:hover {
+  background: var(--bg-hover);
+}
+
+.optionSelected {
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.optionSelected:hover {
+  background: var(--bg-hover);
+}

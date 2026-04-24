@@ -26,6 +26,9 @@ public class PaymentItem {
     private Double actualAmount;
     private boolean completed;
 
+    // Sipariş bağlantısı — otomatik oluşturulan ödeme kalemlerinde kaynak sipariş ID'si
+    private String sourceOrderId;
+
     public PaymentItem() { this.id = UUID.randomUUID().toString(); }
 
     public String getId() { return id; }
@@ -50,4 +53,6 @@ public class PaymentItem {
     public void setActualAmount(Double actualAmount) { this.actualAmount = actualAmount; }
     public boolean isCompleted() { return completed; }
     public void setCompleted(boolean completed) { this.completed = completed; }
+    public String getSourceOrderId() { return sourceOrderId; }
+    public void setSourceOrderId(String sourceOrderId) { this.sourceOrderId = sourceOrderId; }
 }
