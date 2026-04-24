@@ -14,7 +14,7 @@
 createdb -U <kullanıcı_adı> planus
 ```
 
-`backend/src/main/resources/application.properties` dosyasında bağlantı bilgilerini güncelle. Tablolar ilk açılışta Hibernate tarafından otomatik oluşturulur.
+`backend/src/main/resources/application.properties` dosyasında bağlantı bilgilerini güncelle. Tablolar **Flyway** migration dosyaları (`V1__initial_schema.sql` ve sonrası) ile otomatik oluşturulur — ilk açılışta çalışır.
 
 ### Başlatma (Mac/Linux)
 
@@ -127,13 +127,30 @@ Tarayıcıda `http://sunucu-ip` ile eriş.
 
 ## API Endpoints
 
+Tüm endpoint'ler JWT ile korunur. İsteklerde `Authorization: Bearer <token>` header'ı gereklidir.
+
+### Auth
+- `POST /api/auth/login`
+- `GET  /api/auth/me`
+
 ### Projeler
 - `GET/POST /api/projects`
 - `GET/PUT/DELETE /api/projects/{id}`
+- `PUT /api/projects/{id}/budget`
+- `PUT /api/projects/{id}/personnel`
+
+### Proje Kategorileri
+- `GET/POST /api/project-categories`
+- `GET/PUT/DELETE /api/project-categories/{id}`
+
+### Proje Tipleri
+- `GET/POST /api/project-types`
+- `GET/PUT/DELETE /api/project-types/{id}`
 
 ### Personel
 - `GET/POST /api/personnel`
 - `GET/PUT/DELETE /api/personnel/{id}`
+- `GET /api/personnel/search`
 
 ### Kıdem
 - `GET/POST /api/seniorities`
@@ -143,13 +160,21 @@ Tarayıcıda `http://sunucu-ip` ile eriş.
 - `GET/POST /api/organizations`
 - `GET/PUT/DELETE /api/organizations/{id}`
 
-### Proje Tipleri
-- `GET/POST /api/project-types`
-- `GET/PUT/DELETE /api/project-types/{id}`
-
-### Potansiyel Satışlar
+### Potansiyel Satışlar & Siparişler
 - `GET/POST /api/potential-sales`
 - `GET/PUT/DELETE /api/potential-sales/{id}`
+- `GET /api/potential-sales/project/{projectId}`
+- `POST /api/potential-sales/repair-payment-items`
+
+### Maliyet Tipleri
+- `GET/POST /api/cost-types`
+- `GET/PUT/DELETE /api/cost-types/{id}`
+
+### Proje Maliyetleri
+- `GET/POST /api/project-costs`
+- `GET /api/project-costs/project/{projectId}`
+- `GET /api/project-costs/summary`
+- `DELETE /api/project-costs/{id}`
 
 ### Ürünler
 - `GET/POST /api/products`
