@@ -3,6 +3,9 @@ package com.projectmanager.service;
 import com.projectmanager.model.Personnel;
 import com.projectmanager.repository.PersonnelRepository;
 import com.projectmanager.repository.SeniorityRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +25,14 @@ public class PersonnelService {
 
     public List<Personnel> getAll() { return personnelRepository.findAll(); }
     public Optional<Personnel> getById(String id) { return personnelRepository.findById(id); }
+
+    public Page<Personnel> search(String q, String unitId, int page, int size) {
+        PageRequest pageable = PageRequest.of(page, size, Sort.by("lastName", "firstName"));
+        // Wildcard ve küçük harf dönüşümünü Java'da yap → PostgreSQL bytea sorunu önlenir
+        String search = (q == null || q.isBlank()) ? null : "%" + q.trim().toLowerCase() + "%";
+        String unit   = (unitId == null || unitId.isBlank()) ? null : unitId.trim();
+        return personnelRepository.search(unit, search, pageable);
+    }
 
     @Transactional
     public Personnel create(Personnel personnel) {

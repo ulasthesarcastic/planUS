@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
-import { personnelApi, seniorityApi, organizationApi } from '../../services/api';
+import { personnelApi } from '../../services/api';
 import SearchableSelect from '../SearchableSelect';
+import { usePersonnel, useSeniorities, useOrganization, useInvalidate } from '../../hooks/useQueries';
+import { useToast } from '../Toast/Toaster';
 
 function XIcon() { return <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>; }
 function EditIcon() { return <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>; }
@@ -21,6 +23,7 @@ function FilterBtn({ label, active, onClick, color = 'var(--accent)' }) {
 
 function PersonnelModal({ personnel, seniorities, units, onSave, onClose }) {
   const isEdit = !!personnel;
+  const toast = useToast();
   const roots = units.filter(u => !u.parentId);
 
   const [form, setForm] = useState({
@@ -57,6 +60,7 @@ function PersonnelModal({ personnel, seniorities, units, onSave, onClose }) {
       const payload = { ...form, seniorityId: Number(form.seniorityId), unitId: form.unitId ? Number(form.unitId) : null };
       if (isEdit) await personnelApi.update(personnel.id, payload);
       else await personnelApi.create(payload);
+      toast.success(isEdit ? 'Personel güncellendi.' : 'Personel oluşturuldu.');
       onSave();
     } catch (e) {
       setError(e.response?.data?.error || 'Bir hata oluştu.');
@@ -132,10 +136,12 @@ function PersonnelModal({ personnel, seniorities, units, onSave, onClose }) {
 }
 
 export default function PersonnelPage() {
-  const [personnel, setPersonnel] = useState([]);
-  const [seniorities, setSeniorities] = useState([]);
-  const [units, setUnits] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data: personnel = [], isLoading: loading } = usePersonnel();
+  const { data: seniorities = [] } = useSeniorities();
+  const { data: units = [] } = useOrganization();
+  const invalidate = useInvalidate();
+  const toast = useToast();
+
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -143,14 +149,6 @@ export default function PersonnelPage() {
   const [sortDir, setSortDir] = useState('asc');
   const [filterRoot, setFilterRoot] = useState('ALL');
   const [filterChild, setFilterChild] = useState('ALL');
-
-  const load = async () => {
-    try {
-      const [pRes, sRes, uRes] = await Promise.all([personnelApi.getAll(), seniorityApi.getAll(), organizationApi.getAll()]);
-      setPersonnel(pRes.data); setSeniorities(sRes.data); setUnits(uRes.data);
-    } finally { setLoading(false); }
-  };
-  useEffect(() => { load(); }, []);
 
   const roots = units.filter(u => !u.parentId);
   const getChildren = (rootId) => units.filter(u => String(u.parentId) === String(rootId));
@@ -162,7 +160,12 @@ export default function PersonnelPage() {
     return unit.parentId ? String(unit.parentId) : String(unit.id);
   };
 
-  const handleDelete = async (id) => { await personnelApi.delete(id); setDeleteConfirm(null); load(); };
+  const handleDelete = async (id) => {
+    await personnelApi.delete(id);
+    setDeleteConfirm(null);
+    invalidate.personnel();
+    toast.success('Personel silindi.');
+  };
 
   const handleSort = (col) => {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -238,6 +241,7 @@ export default function PersonnelPage() {
                   <th onClick={() => handleSort('name')} style={{ cursor: 'pointer' }}>Ad Soyad <SortIcon col="name" /></th>
                   <th onClick={() => handleSort('seniority')} style={{ cursor: 'pointer' }}>Kıdem <SortIcon col="seniority" /></th>
                   <th onClick={() => handleSort('unit')} style={{ cursor: 'pointer' }}>Birim <SortIcon col="unit" /></th>
+                  <th style={{ color: 'var(--text-muted)', fontWeight: 400 }}>Son Güncelleme</th>
                   <th style={{ textAlign: 'right' }}>İşlemler</th>
                 </tr>
               </thead>
@@ -247,6 +251,10 @@ export default function PersonnelPage() {
                     <td style={{ fontWeight: 500 }}>{p.firstName} {p.lastName}</td>
                     <td><span className="seniority-badge">{getSeniorityName(p.seniorityId)}</span></td>
                     <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{getUnitName(p.unitId)}</td>
+                    <td style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'DM Mono, monospace' }}>
+                      {p.updatedBy && <span title={p.updatedBy}>{p.updatedBy}</span>}
+                      {p.updatedAt && <span style={{ display: 'block', fontSize: 11 }}>{new Date(p.updatedAt).toLocaleDateString('tr-TR')}</span>}
+                    </td>
                     <td>
                       <div className="actions-cell">
                         <button className="btn-icon" onClick={() => { setEditing(p); setModalOpen(true); }}><EditIcon /></button>
@@ -263,7 +271,7 @@ export default function PersonnelPage() {
 
       {modalOpen && (
         <PersonnelModal personnel={editing} seniorities={seniorities} units={units}
-          onSave={() => { setModalOpen(false); load(); }}
+          onSave={() => { setModalOpen(false); invalidate.personnel(); }}
           onClose={() => setModalOpen(false)} />
       )}
 

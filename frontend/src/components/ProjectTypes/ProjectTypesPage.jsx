@@ -1,21 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { projectTypeApi } from '../../services/api';
+import { useProjectTypes, useInvalidate } from '../../hooks/useQueries';
 
 function XIcon() { return <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>; }
 function EditIcon() { return <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>; }
 function TrashIcon() { return <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>; }
 
 export default function ProjectTypesPage() {
-  const [types, setTypes] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data: types = [], isLoading: loading } = useProjectTypes();
+  const invalidate = useInvalidate();
+
   const [editing, setEditing] = useState(null); // null | 'new' | {id, name}
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [deleteId, setDeleteId] = useState(null);
-
-  const load = () => projectTypeApi.getAll().then(r => { setTypes(r.data); setLoading(false); });
-  useEffect(() => { load(); }, []);
 
   const openNew  = () => { setEditing('new'); setName(''); setError(''); };
   const openEdit = (t) => { setEditing(t); setName(t.name); setError(''); };
@@ -27,7 +26,7 @@ export default function ProjectTypesPage() {
     try {
       if (editing === 'new') await projectTypeApi.create({ name: name.trim() });
       else await projectTypeApi.update(editing.id, { name: name.trim() });
-      cancel(); load();
+      cancel(); invalidate.projectTypes();
     } catch (e) {
       setError(e.response?.data?.error || 'Bir hata oluştu.');
     } finally { setSaving(false); }
@@ -35,7 +34,7 @@ export default function ProjectTypesPage() {
 
   const confirmDelete = async () => {
     setSaving(true);
-    try { await projectTypeApi.delete(deleteId); setDeleteId(null); load(); }
+    try { await projectTypeApi.delete(deleteId); setDeleteId(null); invalidate.projectTypes(); }
     catch (e) { setError(e.response?.data?.error || 'Silinemedi.'); setDeleteId(null); }
     finally { setSaving(false); }
   };

@@ -34,6 +34,9 @@ public class ProjectCategoryService {
             existing.setName(cat.getName());
             existing.setColor(cat.getColor());
             existing.setStepOrder(cat.getStepOrder());
+            existing.setIcon(cat.getIcon());
+            existing.setSectionLabel(cat.getSectionLabel());
+            existing.setMenuLabel(cat.getMenuLabel());
             return repo.save(existing);
         });
     }

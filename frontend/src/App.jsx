@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { useState, useEffect, useRef } from 'react';
 import LoginPage from './auth/LoginPage';
@@ -10,11 +11,17 @@ import ProductsPage from './components/Products/ProductsPage';
 import OrganizationPage from './components/Organization/OrganizationPage';
 import SalesPage from './components/Sales/SalesPage';
 import PotansiyelSiparislerPage from './components/Sales/PotansiyelSiparislerPage';
+import SiparislerPage from './components/Sales/SiparislerPage';
 import BudgetPage from './components/Budget/BudgetPage';
 import ResourcePlanningPage from './components/ResourcePlanning/ResourcePlanningPage';
 import PnLPage from './components/PnL/PnLPage';
 import ProjectTypesPage from './components/ProjectTypes/ProjectTypesPage';
 import ProjectCategoriesPage from './components/ProjectCategories/ProjectCategoriesPage';
+import CostTypesPage from './components/CostTypes/CostTypesPage';
+import { toSlug } from './components/Sidebar';
+import { projectCategoryApi } from './services/api';
+import DashboardPage from './components/Dashboard/DashboardPage';
+import { ToastProvider } from './components/Toast/Toaster';
 import './styles/global.css';
 
 function UserIcon() {
@@ -168,6 +175,22 @@ function TopBar({ user, logout, theme, toggleTheme }) {
   );
 }
 
+function CategoryProjectsPage() {
+  const { categorySlug } = useParams();
+  const [categoryId, setCategoryId] = useState(null);
+
+  useEffect(() => {
+    projectCategoryApi.getAll().then(res => {
+      const cats = res.data || [];
+      const match = cats.find(c => toSlug(c.name) === categorySlug);
+      if (match) setCategoryId(match.id);
+    });
+  }, [categorySlug]);
+
+  if (!categoryId) return null;
+  return <ProjectsPage categoryId={categoryId} />;
+}
+
 function AppContent() {
   const { user, loading, logout } = useAuth();
 
@@ -207,8 +230,9 @@ function AppContent() {
         <TopBar user={user} logout={logout} theme={theme} toggleTheme={toggleTheme} />
         <main className="main-content">
           <Routes>
-            <Route path="/" element={<Navigate to="/projects" replace />} />
+            <Route path="/" element={<DashboardPage />} />
             <Route path="/projects" element={<ProjectsPage />} />
+            <Route path="/category/:categorySlug" element={<CategoryProjectsPage />} />
             <Route path="/products" element={<ProductsPage />} />
             <Route path="/seniorities" element={<SenioritiesPage />} />
             <Route path="/personnel" element={<PersonnelPage />} />
@@ -219,7 +243,9 @@ function AppContent() {
             <Route path="/project-categories" element={<ProjectCategoriesPage />} />
             <Route path="/sales" element={<SalesPage />} />
             <Route path="/potansiyel-siparisler" element={<PotansiyelSiparislerPage />} />
+            <Route path="/siparisler" element={<SiparislerPage />} />
             <Route path="/budget" element={<BudgetPage />} />
+            <Route path="/cost-types" element={<CostTypesPage />} />
           </Routes>
         </main>
       </div>
@@ -228,11 +254,24 @@ function AppContent() {
 }
 
 export default function App() {
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <ToastProvider>
+            <AppContent />
+          </ToastProvider>
+        </AuthProvider>
+      </QueryClientProvider>
     </BrowserRouter>
   );
 }

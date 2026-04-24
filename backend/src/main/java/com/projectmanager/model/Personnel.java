@@ -5,7 +5,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "personnel")
-public class Personnel {
+public class Personnel extends Auditable {
     @Id
     private String id;
 

@@ -1,9 +1,14 @@
 package com.projectmanager.service;
 
 import com.projectmanager.model.*;
+import com.projectmanager.repository.PaymentItemRepository;
 import com.projectmanager.repository.PersonnelRepository;
+import com.projectmanager.repository.PotentialSaleRepository;
 import com.projectmanager.repository.ProjectRepository;
 import com.projectmanager.repository.ResourceEntryRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,15 +21,33 @@ public class ProjectService {
     private final ProjectRepository projectRepository;
     private final PersonnelRepository personnelRepository;
     private final ResourceEntryRepository resourceEntryRepository;
+    private final PaymentItemRepository paymentItemRepository;
+    private final PotentialSaleRepository potentialSaleRepository;
 
-    public ProjectService(ProjectRepository projectRepository, PersonnelRepository personnelRepository, ResourceEntryRepository resourceEntryRepository) {
+    public ProjectService(ProjectRepository projectRepository,
+                          PersonnelRepository personnelRepository,
+                          ResourceEntryRepository resourceEntryRepository,
+                          PaymentItemRepository paymentItemRepository,
+                          PotentialSaleRepository potentialSaleRepository) {
         this.projectRepository = projectRepository;
         this.personnelRepository = personnelRepository;
         this.resourceEntryRepository = resourceEntryRepository;
+        this.paymentItemRepository = paymentItemRepository;
+        this.potentialSaleRepository = potentialSaleRepository;
     }
 
     public List<Project> getAll() { return projectRepository.findAll(); }
     public Optional<Project> getById(String id) { return projectRepository.findById(id); }
+
+    public Page<Project> getPaged(int page, int size, String categoryId, String status, String excludeStatus) {
+        PageRequest pageable = PageRequest.of(page, size, Sort.by("name"));
+        return projectRepository.findByFilters(
+            (categoryId == null || categoryId.isBlank()) ? null : categoryId,
+            (status == null || status.isBlank()) ? null : status,
+            (excludeStatus == null || excludeStatus.isBlank()) ? null : excludeStatus,
+            pageable
+        );
+    }
 
     @Transactional
     public Project create(Project project) {
@@ -58,9 +81,8 @@ public class ProjectService {
     }
 
     @Transactional
-    public Optional<Project> updateBudget(String id, double remainingBudget, double potentialSales) {
+    public Optional<Project> updateBudget(String id, double potentialSales) {
         return projectRepository.findById(id).map(p -> {
-            p.setRemainingBudget(remainingBudget);
             p.setPotentialSales(potentialSales);
             return projectRepository.save(p);
         });
@@ -78,7 +100,26 @@ public class ProjectService {
 
     @Transactional
     public Optional<Project> updatePaymentPlan(String id, List<PaymentItem> paymentPlan) {
-        return projectRepository.findById(id).map(p -> { p.setPaymentPlan(paymentPlan); return projectRepository.save(p); });
+        return projectRepository.findById(id).map(p -> {
+            // Silinen ödeme kalemlerini bul: sourceOrderId'si olan ama yeni listede olmayan
+            List<PaymentItem> existingItems = paymentItemRepository.findByProject_Id(id);
+            java.util.Set<String> incomingIds = new java.util.HashSet<>();
+            if (paymentPlan != null) {
+                paymentPlan.forEach(item -> { if (item.getId() != null) incomingIds.add(item.getId()); });
+            }
+            for (PaymentItem existing : existingItems) {
+                if (existing.getSourceOrderId() != null && !incomingIds.contains(existing.getId())) {
+                    // Bu ödeme kalemi silindi → ilgili siparişi potansiyele taşı
+                    potentialSaleRepository.findById(existing.getSourceOrderId()).ifPresent(sale -> {
+                        sale.setStatus(PotentialSale.Status.AKTIF);
+                        sale.setProbability(50.0);
+                        potentialSaleRepository.save(sale);
+                    });
+                }
+            }
+            p.setPaymentPlan(paymentPlan);
+            return projectRepository.save(p);
+        });
     }
 
     @Transactional

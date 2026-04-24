@@ -8,7 +8,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "projects")
-public class Project {
+public class Project extends Auditable {
     @Id
     private String id;
 
@@ -25,7 +25,6 @@ public class Project {
     private int endYear;
     private double budget;
     private String budgetCurrency;
-    private double remainingBudget;
     private double potentialSales;
     private String projectManagerId;
     private String techLeadId;
@@ -89,8 +88,6 @@ public class Project {
     public void setBudget(double budget) { this.budget = budget; }
     public String getBudgetCurrency() { return budgetCurrency; }
     public void setBudgetCurrency(String budgetCurrency) { this.budgetCurrency = budgetCurrency; }
-    public double getRemainingBudget() { return remainingBudget; }
-    public void setRemainingBudget(double remainingBudget) { this.remainingBudget = remainingBudget; }
     public double getPotentialSales() { return potentialSales; }
     public void setPotentialSales(double potentialSales) { this.potentialSales = potentialSales; }
     public String getProjectManagerId() { return projectManagerId; }

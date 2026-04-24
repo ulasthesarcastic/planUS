@@ -1,6 +1,9 @@
 import { NavLink, useLocation, useNavigate, Link } from 'react-router-dom';
 import { useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { useCategories } from '../hooks/useQueries';
+import { toSlug } from '../utils/slug';
+export { toSlug };
 import logo from '../assets/logo.png';
 import logoIcon from '../assets/logo-icon.png';
 
@@ -32,7 +35,22 @@ const Icons = {
   Grid:     () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>,
 };
 
-const SETTINGS_ROUTES = ['/seniorities', '/personnel', '/organization', '/project-types', '/project-categories'];
+const CAT_ICONS = {
+  folder:   () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>,
+  box:      () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>,
+  building: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg>,
+  grid:     () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>,
+  trend:    () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
+  dollar:   () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,
+  users:    () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+  award:    () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></svg>,
+  code:     () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>,
+  layers:   () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>,
+  cpu:      () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>,
+  star:     () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
+};
+
+const SETTINGS_ROUTES = ['/seniorities', '/personnel', '/organization', '/project-types', '/project-categories', '/cost-types'];
 
 export default function Sidebar() {
   const location = useLocation();
@@ -41,6 +59,8 @@ export default function Sidebar() {
 
   const collapseKey = user ? `sidebar_collapsed_${user.username}` : 'sidebar_collapsed';
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(collapseKey) === 'true');
+  const { data: categoriesRaw = [] } = useCategories();
+  const categories = [...categoriesRaw].sort((a, b) => a.stepOrder - b.stepOrder);
 
   const inSettings = SETTINGS_ROUTES.includes(location.pathname);
 
@@ -56,7 +76,7 @@ export default function Sidebar() {
     <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>
       {/* Logo area */}
       <div className="sidebar-logo" style={{ paddingBottom: 16, borderBottom: '1px solid var(--border)', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between', gap: 8 }}>
-        <Link to="/projects" style={{ display: 'block', overflow: 'hidden', flex: 1, minWidth: 0 }}>
+        <Link to="/" style={{ display: 'block', overflow: 'hidden', flex: 1, minWidth: 0 }}>
           {collapsed ? (
             <div style={{ display: 'flex', justifyContent: 'center' }}>
               <img src={logoIcon} alt="planUS" style={{ width: 32, height: 32, filter: 'brightness(0) invert(1)' }} />
@@ -72,7 +92,7 @@ export default function Sidebar() {
         {inSettings ? (
           <div className="sidebar-section">
             <button
-              onClick={() => navigate('/projects')}
+              onClick={() => navigate(categories.length > 0 ? `/category/${toSlug(categories[0].name)}` : '/projects')}
               style={{
                 display: 'flex', alignItems: 'center', gap: 8, justifyContent: collapsed ? 'center' : 'flex-start',
                 width: '100%', padding: collapsed ? '7px' : '7px 10px', marginBottom: 6,
@@ -94,6 +114,10 @@ export default function Sidebar() {
             <NavLink to="/project-categories" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Proje Kategorileri">
               <Icons.Grid />{!collapsed && <span className="nav-item-label">Proje Kategorileri</span>}
             </NavLink>
+            {!collapsed && <div className="sidebar-section-label" style={{ marginTop: 8 }}>Maliyetler</div>}
+            <NavLink to="/cost-types" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Maliyet Tipleri">
+              <Icons.DollarSign />{!collapsed && <span className="nav-item-label">Maliyet Tipleri</span>}
+            </NavLink>
             {!collapsed && <div className="sidebar-section-label" style={{ marginTop: 8 }}>Kaynaklar</div>}
             <NavLink to="/seniorities" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Kıdem Yönetimi">
               <Icons.Award />{!collapsed && <span className="nav-item-label">Kıdem Yönetimi</span>}
@@ -107,27 +131,55 @@ export default function Sidebar() {
           </div>
         ) : (
           <>
+            {/* Dashboard */}
             <div className="sidebar-section">
-              {!collapsed && <div className="sidebar-section-label">Projeler</div>}
-              <NavLink to="/projects" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Proje Yönetimi">
-                <Icons.Folder />{!collapsed && <span className="nav-item-label">Proje Yönetimi</span>}
+              <NavLink to="/" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Dashboard">
+                <Icons.Grid />{!collapsed && <span className="nav-item-label">Dashboard</span>}
               </NavLink>
             </div>
-
+            {/* Portföy Yönetimi bölümü */}
             <div className="sidebar-section">
-              {!collapsed && <div className="sidebar-section-label">Ürünler</div>}
+              {!collapsed && <div className="sidebar-section-label">Portföy Yönetimi</div>}
+              {categories.map(cat => {
+                const menuLabel = cat.menuLabel || (cat.name + ' Yönetimi');
+                const CIcon = CAT_ICONS[cat.icon] || CAT_ICONS.folder;
+                return (
+                  <NavLink
+                    key={cat.id}
+                    to={`/category/${toSlug(cat.name)}`}
+                    state={{ fromSidebar: true }}
+                    className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                    title={menuLabel}
+                    style={cat.color ? { '--cat-color': cat.color } : {}}
+                  >
+                    <CIcon />
+                    {!collapsed && <span className="nav-item-label">{menuLabel}</span>}
+                  </NavLink>
+                );
+              })}
               <NavLink to="/products" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Ürün Yönetimi">
                 <Icons.Box />{!collapsed && <span className="nav-item-label">Ürün Yönetimi</span>}
               </NavLink>
-            </div>
-
-            <div className="sidebar-section">
-              {!collapsed && <div className="sidebar-section-label">Kaynak Yönetimi</div>}
               <NavLink to="/resource-planning" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Kaynak Planlama">
                 <Icons.Grid />{!collapsed && <span className="nav-item-label">Kaynak Planlama</span>}
               </NavLink>
             </div>
 
+            {/* İş Geliştirme bölümü */}
+            <div className="sidebar-section">
+              {!collapsed && <div className="sidebar-section-label">İş Geliştirme</div>}
+              <NavLink to="/sales" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Potansiyel Projeler">
+                <Icons.TrendUp />{!collapsed && <span className="nav-item-label">Potansiyel Projeler</span>}
+              </NavLink>
+              <NavLink to="/potansiyel-siparisler" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Potansiyel Siparişler">
+                <Icons.Box />{!collapsed && <span className="nav-item-label">Potansiyel Siparişler</span>}
+              </NavLink>
+              <NavLink to="/siparisler" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Siparişler">
+                <Icons.DollarSign />{!collapsed && <span className="nav-item-label">Siparişler</span>}
+              </NavLink>
+            </div>
+
+            {/* Finans bölümü */}
             <div className="sidebar-section">
               {!collapsed && <div className="sidebar-section-label">Finans</div>}
               <NavLink to="/pnl" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="P&L">
@@ -135,12 +187,6 @@ export default function Sidebar() {
               </NavLink>
               <NavLink to="/budget" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Bütçe Yönetimi">
                 <Icons.DollarSign />{!collapsed && <span className="nav-item-label">Bütçe Yönetimi</span>}
-              </NavLink>
-              <NavLink to="/sales" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Potansiyel Projeler">
-                <Icons.TrendUp />{!collapsed && <span className="nav-item-label">Potansiyel Projeler</span>}
-              </NavLink>
-              <NavLink to="/potansiyel-siparisler" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Potansiyel Siparişler">
-                <Icons.Box />{!collapsed && <span className="nav-item-label">Potansiyel Siparişler</span>}
               </NavLink>
             </div>
           </>

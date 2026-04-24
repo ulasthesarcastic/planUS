@@ -2,6 +2,7 @@ package com.projectmanager.controller;
 
 import com.projectmanager.model.Personnel;
 import com.projectmanager.service.PersonnelService;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,6 +22,17 @@ public class PersonnelController {
     @GetMapping
     public List<Personnel> getAll() {
         return personnelService.getAll();
+    }
+
+    // Arama + sayfalı endpoint
+    // GET /api/personnel/search?q=ali&page=0&size=20&unitId=xxx
+    @GetMapping("/search")
+    public Page<Personnel> search(
+            @RequestParam(defaultValue = "")   String q,
+            @RequestParam(defaultValue = "0")  int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false)    String unitId) {
+        return personnelService.search(q, unitId, page, size);
     }
 
     @GetMapping("/{id}")

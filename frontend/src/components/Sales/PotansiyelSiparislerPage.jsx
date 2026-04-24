@@ -1,21 +1,24 @@
-import { useState, useEffect } from 'react';
-import { potentialSaleApi, projectApi, projectCategoryApi } from '../../services/api';
+import { useState, useEffect, useMemo } from 'react';
+import { potentialSaleApi } from '../../services/api';
+import { usePotentialSales, useProjects, useCategories, useInvalidate } from '../../hooks/useQueries';
 import SearchableSelect from '../SearchableSelect';
 
 const MONTHS = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
 const YEARS = [2024, 2025, 2026, 2027, 2028];
 const fmt = (n) => (n || 0).toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
+// Bu sayfa: sadece AKTIF + KAYBEDILDI siparişler
+// KAZANILDI olanlar → Siparişler sayfasında gösterilir
 const STATUS_CFG = {
   AKTIF:      { label: 'Aktif',      color: '#4f8ef7', bg: 'rgba(79,142,247,0.12)' },
-  KAZANILDI:  { label: 'Kazanıldı', color: '#34c97a', bg: 'rgba(52,201,122,0.12)' },
-  KAYBEDILDI: { label: 'Kaybedildi',color: '#f05c5c', bg: 'rgba(240,92,92,0.12)' },
+  KAYBEDILDI: { label: 'Kaybedildi', color: '#f05c5c', bg: 'rgba(240,92,92,0.12)' },
+  KAZANILDI:  { label: 'Kazanıldı',  color: '#34c97a', bg: 'rgba(52,201,122,0.12)' },
 };
 
 const probColor = (p) => p >= 70 ? '#34c97a' : p >= 40 ? '#f5a623' : '#f05c5c';
 
 const emptySale = () => ({
-  name: '', projectId: '', amount: '', currency: 'TRY',
+  name: '', categoryId: '', projectId: '', amount: '', currency: 'TRY',
   probability: 50, targetMonth: new Date().getMonth() + 1,
   targetYear: new Date().getFullYear(), status: 'AKTIF', saleType: 'SIPARIS',
 });
@@ -42,23 +45,32 @@ function PlusIcon()  { return <svg width="14" height="14" fill="none" stroke="cu
 function EditIcon()  { return <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>; }
 function TrashIcon() { return <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>; }
 function XIcon()     { return <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>; }
+function CheckIcon() { return <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>; }
 
-function SaleModal({ sale, projects, onSave, onClose }) {
+function SaleModal({ sale, projects, categories, onSave, onClose }) {
   const isEdit = !!sale?.id;
   const [form, setForm] = useState(sale?.id ? { ...sale } : emptySale());
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Seçili kategoriye göre projeleri filtrele
+  const filteredProjects = useMemo(() => {
+    if (!form.categoryId) return projects;
+    return projects.filter(p => String(p.categoryId) === String(form.categoryId));
+  }, [projects, form.categoryId]);
+
+  const handleCategoryChange = (catId) => {
+    setForm(f => ({ ...f, categoryId: catId, projectId: '' }));
+  };
+
   const handleStatusChange = (status) => {
-    let prob = form.probability;
-    if (status === 'KAZANILDI') prob = 100;
-    else if (status === 'KAYBEDILDI') prob = 0;
+    const prob = status === 'KAYBEDILDI' ? 0 : form.probability;
     setForm(f => ({ ...f, status, probability: prob }));
   };
 
   const handleProbChange = (val) => {
-    const p = Math.min(100, Math.max(0, +val));
-    const status = p === 100 ? 'KAZANILDI' : p === 0 ? 'KAYBEDILDI' : 'AKTIF';
+    const p = Math.min(99, Math.max(0, +val));
+    const status = p === 0 ? 'KAYBEDILDI' : 'AKTIF';
     setForm(f => ({ ...f, probability: p, status }));
   };
 
@@ -67,8 +79,36 @@ function SaleModal({ sale, projects, onSave, onClose }) {
     setSaving(true);
     try {
       const prob = parseFloat(form.probability) || 0;
-      const status = prob === 100 ? 'KAZANILDI' : form.status;
-      const data = { ...form, amount: parseFloat(form.amount) || 0, probability: prob, status };
+      const status = prob === 0 ? 'KAYBEDILDI' : 'AKTIF';
+      const data = {
+        ...form,
+        amount: parseFloat(form.amount) || 0,
+        probability: prob,
+        status,
+        projectId: form.projectId || null,
+        categoryId: form.categoryId || null,
+      };
+      if (isEdit) await potentialSaleApi.update(sale.id, data);
+      else await potentialSaleApi.create(data);
+      onSave();
+    } catch (e) {
+      setError(e.response?.data?.error || 'Bir hata oluştu.');
+    } finally { setSaving(false); }
+  };
+
+  // Kazanıldı olarak işaretleme
+  const handleMarkWon = async () => {
+    if (!form.name.trim()) return setError('Sipariş adı zorunludur.');
+    setSaving(true);
+    try {
+      const data = {
+        ...form,
+        amount: parseFloat(form.amount) || 0,
+        probability: 100,
+        status: 'KAZANILDI',
+        projectId: form.projectId || null,
+        categoryId: form.categoryId || null,
+      };
       if (isEdit) await potentialSaleApi.update(sale.id, data);
       else await potentialSaleApi.create(data);
       onSave();
@@ -92,8 +132,26 @@ function SaleModal({ sale, projects, onSave, onClose }) {
             onChange={e => setForm(f => ({ ...f, name: e.target.value }))} autoFocus />
         </div>
 
+        {/* Kategori seçimi */}
         <div className="form-group">
-          <label className="form-label">İlgili Proje <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(opsiyonel)</span></label>
+          <label className="form-label">Portföy Kategorisi <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(opsiyonel)</span></label>
+          <SearchableSelect
+            value={form.categoryId || ''}
+            onChange={handleCategoryChange}
+            placeholder="— Seçin —"
+            style={{ width: '100%' }}
+            options={[
+              { value: '', label: '— Seçin —' },
+              ...categories.map(c => ({ value: String(c.id), label: c.menuLabel || c.name })),
+            ]}
+          />
+        </div>
+
+        {/* Proje linki (kategoriye göre filtrelenmiş) */}
+        <div className="form-group">
+          <label className="form-label">
+            İlgili Proje <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(opsiyonel — kazanılınca ödeme planına eklenir)</span>
+          </label>
           <SearchableSelect
             value={form.projectId || ''}
             onChange={v => setForm(f => ({ ...f, projectId: v }))}
@@ -101,9 +159,14 @@ function SaleModal({ sale, projects, onSave, onClose }) {
             style={{ width: '100%' }}
             options={[
               { value: '', label: '— Seçin —' },
-              ...projects.map(p => ({ value: String(p.id), label: p.name })),
+              ...filteredProjects.map(p => ({ value: String(p.id), label: p.name })),
             ]}
           />
+          {form.categoryId && filteredProjects.length === 0 && (
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+              Bu kategoride aktif proje bulunamadı.
+            </div>
+          )}
         </div>
 
         <div className="form-row">
@@ -121,8 +184,8 @@ function SaleModal({ sale, projects, onSave, onClose }) {
         </div>
 
         <div className="form-group">
-          <label className="form-label">Olasılık (%) — %100'de otomatik Kazanıldı</label>
-          <input className="form-input" type="number" min="0" max="100"
+          <label className="form-label">Olasılık (%)</label>
+          <input className="form-input" type="number" min="0" max="99"
             value={form.probability}
             onChange={e => handleProbChange(e.target.value)}
             style={{ fontFamily: 'DM Mono, monospace' }} />
@@ -143,15 +206,18 @@ function SaleModal({ sale, projects, onSave, onClose }) {
         <div className="form-group">
           <label className="form-label">Durum</label>
           <div style={{ display: 'flex', gap: 8 }}>
-            {Object.entries(STATUS_CFG).map(([key, cfg]) => (
-              <button key={key} onClick={() => handleStatusChange(key)} style={{
-                flex: 1, padding: '8px', borderRadius: 8, cursor: 'pointer',
-                border: `2px solid ${form.status === key ? cfg.color : 'var(--border)'}`,
-                background: form.status === key ? cfg.bg : 'var(--bg-secondary)',
-                color: form.status === key ? cfg.color : 'var(--text-muted)',
-                fontFamily: 'DM Sans, sans-serif', fontSize: 12, fontWeight: 600,
-              }}>{cfg.label}</button>
-            ))}
+            {['AKTIF','KAYBEDILDI'].map(key => {
+              const cfg = STATUS_CFG[key];
+              return (
+                <button key={key} onClick={() => handleStatusChange(key)} style={{
+                  flex: 1, padding: '8px', borderRadius: 8, cursor: 'pointer',
+                  border: `2px solid ${form.status === key ? cfg.color : 'var(--border)'}`,
+                  background: form.status === key ? cfg.bg : 'var(--bg-secondary)',
+                  color: form.status === key ? cfg.color : 'var(--text-muted)',
+                  fontFamily: 'DM Sans, sans-serif', fontSize: 12, fontWeight: 600,
+                }}>{cfg.label}</button>
+              );
+            })}
           </div>
         </div>
 
@@ -167,13 +233,17 @@ function SaleModal({ sale, projects, onSave, onClose }) {
           <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
             {saving ? 'Kaydediliyor...' : isEdit ? 'Güncelle' : 'Oluştur'}
           </button>
+          <button className="btn" onClick={handleMarkWon} disabled={saving}
+            style={{ background: '#34c97a', color: 'white', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <CheckIcon /> Kazanıldı
+          </button>
         </div>
       </div>
     </div>
   );
 }
 
-function OrderCard({ s, projectName, categoryName, categoryColor, onEdit, onDelete }) {
+function OrderRow({ s, projectName, categoryName, categoryColor, onEdit, onDelete }) {
   const [hovered, setHovered] = useState(false);
   const cfg = STATUS_CFG[s.status] || STATUS_CFG.AKTIF;
   const estimated = (s.amount || 0) * (s.probability || 0) / 100;
@@ -183,130 +253,130 @@ function OrderCard({ s, projectName, categoryName, categoryColor, onEdit, onDele
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        background: 'var(--bg-card)',
-        border: `1px solid ${hovered ? 'var(--accent)' : s.status === 'KAZANILDI' ? 'rgba(52,201,122,0.3)' : s.status === 'KAYBEDILDI' ? 'rgba(240,92,92,0.2)' : 'var(--border)'}`,
-        borderRadius: 12, padding: 16,
-        display: 'flex', flexDirection: 'column', gap: 10,
-        boxShadow: hovered ? '0 2px 14px rgba(99,102,241,0.12)' : 'none',
-        transition: 'box-shadow 0.15s, border-color 0.15s',
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '10px 14px',
+        background: hovered ? 'var(--bg-hover)' : 'transparent',
+        transition: 'background 0.12s',
+        borderBottom: '1px solid var(--border)',
       }}
     >
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span style={{
-            fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
-            background: cfg.bg, color: cfg.color,
-          }}>{cfg.label}</span>
-          {categoryName && (
-            <span style={{
-              fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 20,
-              background: `${categoryColor}22`, color: categoryColor,
-              border: `1px solid ${categoryColor}44`,
-            }}>{categoryName}</span>
-          )}
-        </div>
-        <div style={{ display: 'flex', gap: 2 }}>
-          <button className="btn-icon" onClick={() => onEdit(s)} style={{ padding: 4 }}><EditIcon /></button>
-          <button className="btn-icon danger" onClick={() => onDelete(s)} style={{ padding: 4 }}><TrashIcon /></button>
-        </div>
+      {/* Durum */}
+      <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: cfg.bg, color: cfg.color, whiteSpace: 'nowrap' }}>{cfg.label}</span>
+
+      {/* İsim + proje */}
+      <div style={{ flex: '0 0 200px', minWidth: 0 }}>
+        <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</div>
+        {projectName && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{projectName}</div>}
       </div>
 
-      {/* Title */}
-      <div>
-        <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', marginBottom: 2 }}>{s.name}</div>
-        {projectName && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{projectName}</div>}
+      {/* Kategori */}
+      <div style={{ flex: '0 0 120px' }}>
+        {categoryName
+          ? <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: `${categoryColor}22`, color: categoryColor, border: `1px solid ${categoryColor}44` }}>{categoryName}</span>
+          : <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>—</span>}
       </div>
 
-      {/* Probability bar */}
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Olasılık</span>
-          <span style={{ fontSize: 12, fontFamily: 'DM Mono, monospace', color: probColor(s.probability), fontWeight: 600 }}>%{s.probability}</span>
+      {/* Olasılık */}
+      <div style={{ flex: '0 0 100px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Olasılık</span>
+          <span style={{ fontSize: 11, fontFamily: 'DM Mono, monospace', color: probColor(s.probability), fontWeight: 700 }}>%{s.probability}</span>
         </div>
-        <div style={{ height: 5, background: 'var(--bg-hover)', borderRadius: 3, overflow: 'hidden' }}>
-          <div style={{ width: `${s.probability}%`, height: '100%', background: probColor(s.probability), borderRadius: 3 }} />
+        <div style={{ height: 4, background: 'var(--bg-hover)', borderRadius: 2, overflow: 'hidden' }}>
+          <div style={{ width: `${s.probability}%`, height: '100%', background: probColor(s.probability), borderRadius: 2 }} />
         </div>
       </div>
 
-      {/* Amount boxes */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        {[
-          { label: 'Tutar', value: fmt(s.amount), color: 'var(--text-primary)', currency: s.currency },
-          { label: 'Tahminlenen', value: fmt(estimated), color: '#34c97a', currency: s.currency },
-        ].map(box => (
-          <div key={box.label} style={{ padding: '8px 10px', background: 'var(--bg-secondary)', borderRadius: 8, border: '1px solid var(--border)' }}>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{box.label}</div>
-            <div style={{ fontSize: 14, fontFamily: 'DM Mono, monospace', fontWeight: 700, color: box.color }}>{box.value}</div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{box.currency}</div>
-          </div>
-        ))}
+      {/* Tutar */}
+      <div style={{ flex: '0 0 130px', textAlign: 'right' }}>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 1 }}>Tutar</div>
+        <div style={{ fontSize: 13, fontFamily: 'DM Mono, monospace', fontWeight: 600, color: 'var(--text-primary)' }}>
+          {fmt(s.amount)} <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{s.currency}</span>
+        </div>
       </div>
 
-      {/* Target date */}
-      <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'DM Mono, monospace' }}>
-        Hedef: {MONTHS[s.targetMonth - 1]} {s.targetYear}
+      {/* Tahminlenen */}
+      <div style={{ flex: '0 0 130px', textAlign: 'right' }}>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 1 }}>Tahminlenen</div>
+        <div style={{ fontSize: 13, fontFamily: 'DM Mono, monospace', fontWeight: 600, color: '#34c97a' }}>
+          {fmt(estimated)} <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{s.currency}</span>
+        </div>
+      </div>
+
+      {/* Hedef tarih */}
+      <div style={{ flex: '0 0 100px' }}>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'DM Mono, monospace' }}>
+          {MONTHS[s.targetMonth - 1]} {s.targetYear}
+        </div>
+      </div>
+
+      {/* Aksiyonlar */}
+      <div style={{ marginLeft: 'auto', display: 'flex', gap: 4, flexShrink: 0 }}>
+        <button className="btn-icon" onClick={() => onEdit(s)} style={{ padding: 4 }}><EditIcon /></button>
+        <button className="btn-icon danger" onClick={() => onDelete(s)} style={{ padding: 4 }}><TrashIcon /></button>
       </div>
     </div>
   );
 }
 
 export default function PotansiyelSiparislerPage() {
-  const [sales, setSales] = useState([]);
-  const [projects, setProjects] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data: sales = [], isLoading: loading } = usePotentialSales();
+  const { data: projects = [] }                   = useProjects();
+  const { data: categoriesRaw = [] }              = useCategories();
+  const categories = [...categoriesRaw].sort((a, b) => (a.stepOrder || 0) - (b.stepOrder || 0));
+  const invalidate = useInvalidate();
+
   const [editing, setEditing] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [catFilter, setCatFilter] = useState('ALL');
 
-  const load = async () => {
-    const [sRes, pRes, cRes] = await Promise.all([
-      potentialSaleApi.getAll(),
-      projectApi.getAll(),
-      projectCategoryApi.getAll(),
-    ]);
-    setSales(sRes.data);
-    setProjects(pRes.data);
-    setCategories(cRes.data);
-    setLoading(false);
-  };
+  const projectMap  = Object.fromEntries(projects.map(p => [String(p.id), p]));
+  const categoryMap = Object.fromEntries(categories.map(c => [String(c.id), c]));
 
-  useEffect(() => { load(); }, []);
+  // Sadece SIPARIS + KAZANILDI olmayanlar
+  const siparisler = sales.filter(s => s.saleType === 'SIPARIS' && s.status !== 'KAZANILDI');
 
-  // Build maps for lookups
-  const projectMap = Object.fromEntries(projects.map(p => [String(p.id), p]));
-  const categoryMap = Object.fromEntries(categories.map(c => [c.id, c]));
-
-  // Only show sales with saleType === 'SIPARIS'
-  const siparisler = sales.filter(s => s.saleType === 'SIPARIS');
-
-  const getProjectInfo = (projectId) => {
-    if (!projectId) return { name: '', categoryName: '', categoryColor: '' };
-    const project = projectMap[String(projectId)];
-    if (!project) return { name: '', categoryName: '', categoryColor: '' };
-    const cat = project.categoryId ? categoryMap[project.categoryId] : null;
+  const getInfo = (s) => {
+    const project = s.projectId ? projectMap[String(s.projectId)] : null;
+    const cat = s.categoryId
+      ? categoryMap[String(s.categoryId)]
+      : project?.categoryId ? categoryMap[String(project.categoryId)] : null;
     return {
-      name: project.name,
-      categoryName: cat?.name || '',
+      projectName:   project?.name || '',
+      categoryName:  cat?.menuLabel || cat?.name || '',
       categoryColor: cat?.color || '#94a3b8',
     };
   };
 
-  const filtered = siparisler.filter(s => statusFilter === 'ALL' || s.status === statusFilter);
-  const totalEstimated = siparisler.filter(s => s.status === 'AKTIF').reduce((sum, s) => sum + (s.amount || 0) * (s.probability || 0) / 100, 0);
+  const filtered = siparisler.filter(s => {
+    if (statusFilter !== 'ALL' && s.status !== statusFilter) return false;
+    if (catFilter !== 'ALL') {
+      const effectiveCatId = s.categoryId || projectMap[s.projectId]?.categoryId;
+      if (String(effectiveCatId) !== catFilter) return false;
+    }
+    return true;
+  });
+
+  const totalEstimated = siparisler.filter(s => s.status === 'AKTIF')
+    .reduce((sum, s) => sum + (s.amount || 0) * (s.probability || 0) / 100, 0);
 
   const summaryCards = [
-    { label: 'Toplam',     value: siparisler.length,                                          color: 'var(--accent)',       mono: false },
-    { label: 'Aktif',      value: siparisler.filter(s => s.status === 'AKTIF').length,        color: 'var(--text-primary)', mono: false },
-    { label: 'Kazanıldı',  value: siparisler.filter(s => s.status === 'KAZANILDI').length,    color: '#34c97a',             mono: false },
-    { label: 'Tahminlenen',value: fmt(totalEstimated) + ' ₺',                                 color: '#34c97a',             mono: true  },
+    { label: 'Toplam',      value: siparisler.length,                                        color: 'var(--accent)',       mono: false },
+    { label: 'Aktif',       value: siparisler.filter(s => s.status === 'AKTIF').length,      color: 'var(--text-primary)', mono: false },
+    { label: 'Kaybedildi',  value: siparisler.filter(s => s.status === 'KAYBEDILDI').length, color: '#f05c5c',             mono: false },
+    { label: 'Tahminlenen', value: fmt(totalEstimated) + ' ₺',                               color: '#34c97a',             mono: true  },
   ];
 
   const handleDelete = async (s) => {
-    await potentialSaleApi.delete(s.id);
-    setDeleteConfirm(null);
-    load();
+    try {
+      await potentialSaleApi.delete(s.id);
+      setDeleteConfirm(null);
+      invalidate.potentialSales();
+    } catch (e) {
+      alert(e.response?.data?.error || 'Silinemedi.');
+      setDeleteConfirm(null);
+    }
   };
 
   if (loading) return <div className="loading">Yükleniyor...</div>;
@@ -323,7 +393,7 @@ export default function PotansiyelSiparislerPage() {
         </button>
       </div>
 
-      {/* Summary */}
+      {/* Summary cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
         {summaryCards.map(c => (
           <div key={c.label} style={{ padding: '12px 16px', background: 'var(--bg-card)', borderRadius: 10, border: '1px solid var(--border)' }}>
@@ -333,9 +403,9 @@ export default function PotansiyelSiparislerPage() {
         ))}
       </div>
 
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-        {[['ALL','Tümü'], ['AKTIF','Aktif'], ['KAZANILDI','Kazanıldı'], ['KAYBEDILDI','Kaybedildi']].map(([key, label]) => (
+      {/* Filtreler */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+        {[['ALL','Tümü'], ['AKTIF','Aktif'], ['KAYBEDILDI','Kaybedildi']].map(([key, label]) => (
           <button key={key} onClick={() => setStatusFilter(key)} style={{
             padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
             border: `1px solid ${statusFilter === key ? (STATUS_CFG[key]?.color || 'var(--accent)') : 'var(--border)'}`,
@@ -346,24 +416,36 @@ export default function PotansiyelSiparislerPage() {
             {label} ({key === 'ALL' ? siparisler.length : siparisler.filter(s => s.status === key).length})
           </button>
         ))}
+        {categories.length > 0 && (
+          <>
+            <div style={{ width: 1, height: 20, background: 'var(--border)' }} />
+            {[{ id: 'ALL', label: 'Tümü', color: null }, ...categories.map(c => ({ id: String(c.id), label: c.menuLabel || c.name, color: c.color }))].map(c => (
+              <button key={c.id} onClick={() => setCatFilter(c.id)} style={{
+                padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                border: `1px solid ${catFilter === c.id ? (c.color || 'var(--accent)') : 'var(--border)'}`,
+                background: catFilter === c.id ? `${c.color || 'var(--accent)'}22` : 'var(--bg-secondary)',
+                color: catFilter === c.id ? (c.color || 'var(--accent)') : 'var(--text-secondary)',
+                fontFamily: 'DM Sans, sans-serif',
+              }}>{c.label}</button>
+            ))}
+          </>
+        )}
       </div>
 
-      {/* Cards grid */}
       {filtered.length === 0 ? (
-        <div className="empty-state">
-          <p>Gösterilecek sipariş yok.</p>
-          <p style={{ fontSize: 12, marginTop: 8, color: 'var(--text-muted)' }}>
-            Ürün ve hizmet projelerine bağlı siparişler burada görünür.
-          </p>
-        </div>
+        <div className="empty-state"><p>Gösterilecek potansiyel sipariş yok.</p></div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-          {filtered.map(s => {
-            const info = getProjectInfo(s.projectId);
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', gap: 12, padding: '8px 14px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
+            {[['60px','Durum'],['200px','Sipariş'],['120px','Kategori'],['100px','Olasılık'],['130px','Tutar','right'],['130px','Tahminlenen','right'],['100px','Hedef']].map(([w, label, align]) => (
+              <span key={label} style={{ flex: `0 0 ${w}`, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--text-muted)', textAlign: align || 'left' }}>{label}</span>
+            ))}
+          </div>
+          {[...filtered].sort((a, b) => (b.probability || 0) - (a.probability || 0)).map(s => {
+            const info = getInfo(s);
             return (
-              <OrderCard
-                key={s.id} s={s}
-                projectName={info.name}
+              <OrderRow key={s.id} s={s}
+                projectName={info.projectName}
                 categoryName={info.categoryName}
                 categoryColor={info.categoryColor}
                 onEdit={setEditing}
@@ -378,7 +460,8 @@ export default function PotansiyelSiparislerPage() {
         <SaleModal
           sale={editing?.id ? editing : null}
           projects={projects}
-          onSave={() => { setEditing(null); load(); }}
+          categories={categories}
+          onSave={() => { setEditing(null); invalidate.potentialSales(); }}
           onClose={() => setEditing(null)}
         />
       )}

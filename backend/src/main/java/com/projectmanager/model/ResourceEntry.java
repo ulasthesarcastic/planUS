@@ -20,7 +20,6 @@ public class ResourceEntry {
     private int year;
     private Double need;
     private Double planned;
-    private Double actual;
 
     public ResourceEntry() {}
 
@@ -38,6 +37,4 @@ public class ResourceEntry {
     public void setNeed(Double need) { this.need = need; }
     public Double getPlanned() { return planned; }
     public void setPlanned(Double planned) { this.planned = planned; }
-    public Double getActual() { return actual; }
-    public void setActual(Double actual) { this.actual = actual; }
 }

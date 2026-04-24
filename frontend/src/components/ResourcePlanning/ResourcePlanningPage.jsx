@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
-import { organizationApi, personnelApi, projectApi } from '../../services/api';
+import { useState, useMemo, useRef } from 'react';
+import { useProjects, usePersonnel, useOrganization } from '../../hooks/useQueries';
 
 const MONTHS_SHORT = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
 const NAME_W = 220;
@@ -118,10 +118,10 @@ function PotentialSelectorModal({ potProjects, selectedIds, onApply, onClose }) 
 }
 
 export default function ResourcePlanningPage() {
-  const [units, setUnits]         = useState([]);
-  const [personnel, setPersonnel] = useState([]);
-  const [projects, setProjects]   = useState([]);
-  const [loading, setLoading]     = useState(true);
+  const { data: units = [] }     = useOrganization();
+  const { data: personnel = [] } = usePersonnel();
+  const { data: projects = [] }  = useProjects();
+
   const [selectedFilters, setSelectedFilters] = useState(new Set(FILTER_LABELS));
   const [expandedPersons, setExpandedPersons] = useState(new Set());
   const [selectedPotIds, setSelectedPotIds]   = useState(new Set());
@@ -132,19 +132,6 @@ export default function ResourcePlanningPage() {
   const now = new Date();
   const curYear = now.getFullYear();
   const curMonth = now.getMonth() + 1;
-
-  useEffect(() => {
-    Promise.all([
-      organizationApi.getAll(),
-      personnelApi.getAll(),
-      projectApi.getAll(),
-    ]).then(([uRes, pRes, prRes]) => {
-      setUnits(uRes.data);
-      setPersonnel(pRes.data);
-      setProjects(prRes.data);
-      setLoading(false);
-    });
-  }, []);
 
   // Aktif projeler ve potansiyel projeler
   const potProjects    = useMemo(() => projects.filter(p => p.projectStatus === 'POTANSIYEL'), [projects]);
@@ -221,12 +208,6 @@ export default function ResourcePlanningPage() {
       return next;
     });
   };
-
-  if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 64 }}>
-      <div style={{ color: 'var(--text-muted)' }}>Yükleniyor…</div>
-    </div>
-  );
 
   return (
     <div>

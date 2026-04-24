@@ -5,11 +5,14 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "potential_sales")
-public class PotentialSale {
+public class PotentialSale extends Auditable {
     @Id
     private String id;
 
     private String projectId;
+
+    // Portföy kategorisi (Proje Yönetimi, Hizmet Yönetimi vb.)
+    private String categoryId;
 
     @Column(nullable = false)
     private String name;
@@ -42,6 +45,8 @@ public class PotentialSale {
     public void setId(String id) { this.id = id; }
     public String getProjectId() { return projectId; }
     public void setProjectId(String projectId) { this.projectId = projectId; }
+    public String getCategoryId() { return categoryId; }
+    public void setCategoryId(String categoryId) { this.categoryId = categoryId; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
     public double getAmount() { return amount; }
