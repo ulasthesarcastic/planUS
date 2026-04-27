@@ -84,6 +84,13 @@ export const potentialSaleApi = {
   repairPaymentItems: () => API.post('/potential-sales/repair-payment-items'),
 };
 
+export const userApi = {
+  getAll:  ()         => API.get('/users'),
+  create:  (data)     => API.post('/users', data),
+  update:  (id, data) => API.put(`/users/${id}`, data),
+  delete:  (id)       => API.delete(`/users/${id}`),
+};
+
 export const paymentItemApi = {
   delete: (id) => API.delete(`/payment-items/${id}`),
 };

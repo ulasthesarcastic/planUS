@@ -50,7 +50,7 @@ const CAT_ICONS = {
   star:     () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
 };
 
-const SETTINGS_ROUTES = ['/seniorities', '/personnel', '/organization', '/project-types', '/project-categories', '/cost-types'];
+const SETTINGS_ROUTES = ['/seniorities', '/personnel', '/organization', '/project-types', '/project-categories', '/cost-types', '/users'];
 
 export default function Sidebar() {
   const location = useLocation();
@@ -118,6 +118,14 @@ export default function Sidebar() {
             <NavLink to="/cost-types" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Maliyet Tipleri">
               <Icons.DollarSign />{!collapsed && <span className="nav-item-label">Maliyet Tipleri</span>}
             </NavLink>
+            {user?.role === 'ADMIN' && (
+              <>
+                {!collapsed && <div className="sidebar-section-label" style={{ marginTop: 8 }}>Sistem</div>}
+                <NavLink to="/users" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Kullanıcı Yönetimi">
+                  <Icons.Users />{!collapsed && <span className="nav-item-label">Kullanıcılar</span>}
+                </NavLink>
+              </>
+            )}
             {!collapsed && <div className="sidebar-section-label" style={{ marginTop: 8 }}>Kaynaklar</div>}
             <NavLink to="/seniorities" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Kıdem Yönetimi">
               <Icons.Award />{!collapsed && <span className="nav-item-label">Kıdem Yönetimi</span>}

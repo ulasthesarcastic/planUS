@@ -21,6 +21,7 @@ import CostTypesPage from './components/CostTypes/CostTypesPage';
 import { toSlug } from './components/Sidebar';
 import { projectCategoryApi } from './services/api';
 import DashboardPage from './components/Dashboard/DashboardPage';
+import UsersPage from './components/Users/UsersPage';
 import { ToastProvider } from './components/Toast/Toaster';
 import './styles/global.css';
 
@@ -246,6 +247,7 @@ function AppContent() {
             <Route path="/siparisler" element={<SiparislerPage />} />
             <Route path="/budget" element={<BudgetPage />} />
             <Route path="/cost-types" element={<CostTypesPage />} />
+            <Route path="/users" element={<UsersPage />} />
           </Routes>
         </main>
       </div>
