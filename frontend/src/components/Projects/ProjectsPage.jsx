@@ -99,9 +99,11 @@ function getRateForMonth(rates, year, month) {
   return 0;
 }
 
-function analyzeBudget(project, personnelMap, seniorityMap) {
+function analyzeBudget(project, personnelMap, seniorityMap, incurredCost = 0) {
   const now = new Date();
-  const analysisMonth = now.getMonth() + 1;
+  // Bir sonraki aydan başla (BudgetPage ile tutarlı)
+  const curMonth      = now.getMonth() + 1;
+  const analysisMonth = curMonth < 12 ? curMonth + 1 : 12;
   const analysisYear  = now.getFullYear();
   let plannedCost = 0;
   const monthlyCosts = {};
@@ -122,11 +124,12 @@ function analyzeBudget(project, personnelMap, seniorityMap) {
     monthlyCosts[key] = (monthlyCosts[key] || 0) + cost;
     plannedCost += cost;
   }
-  const budget         = project.budget        || 0;
-  const potentialSales = project.potentialSales || 0;
-  const totalAvailable = budget + potentialSales;
+  // Kalan bütçe (BudgetPage ile tutarlı: gerçekleşen maliyetler düşülür)
+  const remainingBudget = Math.max(0, (project.budget || 0) - incurredCost);
+  const potentialSales  = project.potentialSales || 0;
+  const totalAvailable  = remainingBudget + potentialSales;
   const diff = totalAvailable - plannedCost;
-  const hasData = budget > 0 || potentialSales > 0;
+  const hasData = (project.budget || 0) > 0 || potentialSales > 0;
   let eksiyeAy = null;
   let cumCost = 0;
   for (let m = analysisMonth; m <= 12; m++) {
@@ -595,8 +598,9 @@ function PlanningTab({ project, allPersonnel, units, seniorities, onReload }) {
 // ── Project card with budget analysis coloring ───────────────────────────────
 function ProjectCard({ project, personnel, personnelMap, seniorityMap, categoryMap = {}, stepMap = {}, costsByProjectId = {}, onClick, onEdit, onDelete, onMoveToPotensiyal }) {
   const mgr = personnel.find(p => String(p.id) === String(project.projectManagerId));
-  const analysis = (personnelMap && seniorityMap) ? analyzeBudget(project, personnelMap, seniorityMap) : { status: 'nodata' };
-  const remainingBudget = (project.budget || 0) - (costsByProjectId[project.id] || 0);
+  const incurredCost = costsByProjectId[project.id] || 0;
+  const analysis = (personnelMap && seniorityMap) ? analyzeBudget(project, personnelMap, seniorityMap, incurredCost) : { status: 'nodata' };
+  const remainingBudget = Math.max(0, (project.budget || 0) - incurredCost);
   const isAcik = analysis.status === 'acik';
   const [hovered, setHovered] = useState(false);
   const [moving, setMoving] = useState(false);

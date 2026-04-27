@@ -57,7 +57,7 @@ function PersonnelModal({ personnel, seniorities, units, onSave, onClose }) {
     if (!form.seniorityId) return setError('Kıdem seçilmelidir.');
     setError(''); setSaving(true);
     try {
-      const payload = { ...form, seniorityId: Number(form.seniorityId), unitId: form.unitId ? Number(form.unitId) : null };
+      const payload = { ...form, seniorityId: form.seniorityId, unitId: form.unitId || null };
       if (isEdit) await personnelApi.update(personnel.id, payload);
       else await personnelApi.create(payload);
       toast.success(isEdit ? 'Personel güncellendi.' : 'Personel oluşturuldu.');
