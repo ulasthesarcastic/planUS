@@ -37,8 +37,8 @@ public class DataInitializer implements CommandLineRunner {
             System.out.println(">>> Admin kullanıcısı oluşturuldu: admin / admin123");
         }
 
-        // Kategorisiz projeleri "Proje" kategorisine ata
-        List<Project> uncategorized = projectRepository.findByCategoryIdIsNull();
+        // Kategorisiz projeleri (NULL veya boş string) "Proje" kategorisine ata
+        List<Project> uncategorized = projectRepository.findByCategoryIdNullOrEmpty();
         if (!uncategorized.isEmpty()) {
             for (Project p : uncategorized) {
                 p.setCategoryId("cat-proje");

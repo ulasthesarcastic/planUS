@@ -12,6 +12,9 @@ import java.util.List;
 public interface ProjectRepository extends JpaRepository<Project, String> {
     boolean existsByProjectType(String projectType);
     List<Project> findByCategoryIdIsNull();
+
+    @Query("SELECT p FROM Project p WHERE p.categoryId IS NULL OR TRIM(p.categoryId) = ''")
+    List<Project> findByCategoryIdNullOrEmpty();
     List<Project> findByProjectStatus(String projectStatus);
 
     /** Admin / portfolioFull kullanıcılar için — tüm projeleri filtrele */
