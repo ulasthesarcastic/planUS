@@ -53,10 +53,11 @@ function SaleModal({ sale, projects, categories, onSave, onClose }) {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // Seçili kategoriye göre projeleri filtrele
+  // Seçili kategoriye göre projeleri filtrele — POTANSIYEL projeler hariç
   const filteredProjects = useMemo(() => {
-    if (!form.categoryId) return projects;
-    return projects.filter(p => String(p.categoryId) === String(form.categoryId));
+    const nonPotential = projects.filter(p => p.projectStatus !== 'POTANSIYEL');
+    if (!form.categoryId) return nonPotential;
+    return nonPotential.filter(p => String(p.categoryId) === String(form.categoryId));
   }, [projects, form.categoryId]);
 
   const handleCategoryChange = (catId) => {

@@ -200,8 +200,10 @@ public class PotentialSaleService {
             throw new IllegalArgumentException("Satış adı zorunludur.");
         // projectId opsiyonel — sadece girilmişse doğrula
         if (s.getProjectId() != null && !s.getProjectId().isBlank()) {
-            projectRepository.findById(s.getProjectId())
+            var project = projectRepository.findById(s.getProjectId())
                 .orElseThrow(() -> new IllegalArgumentException("Geçersiz proje."));
+            if ("POTANSIYEL".equals(project.getProjectStatus()))
+                throw new IllegalArgumentException("Potansiyel projeler sipariş/satış ile ilişkilendirilemez.");
         }
         if (s.getProbability() < 0 || s.getProbability() > 100)
             throw new IllegalArgumentException("Olasılık 0-100 arasında olmalıdır.");
