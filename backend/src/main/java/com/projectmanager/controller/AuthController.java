@@ -51,8 +51,15 @@ public class AuthController {
         loginAttemptService.loginSucceeded(username);
         return ResponseEntity.ok(Map.of(
             "token", jwtUtil.generateToken(u.getUsername(), u.getRole().name()),
-            "user", Map.of("id", u.getId(), "username", u.getUsername(),
-                           "fullName", u.getFullName(), "role", u.getRole())
+            "user", Map.of(
+                "id",            u.getId(),
+                "username",      u.getUsername(),
+                "fullName",      u.getFullName(),
+                "role",          u.getRole(),
+                "portfolioFull", u.isPortfolioFull(),
+                "busdevFull",    u.isBusdevFull(),
+                "pnlAccess",     u.isPnlAccess()
+            )
         ));
     }
 
@@ -62,8 +69,13 @@ public class AuthController {
         String username = jwtUtil.extractUsername(token);
         return userService.getByUsername(username)
             .map(u -> ResponseEntity.ok(Map.of(
-                "id", u.getId(), "username", u.getUsername(),
-                "fullName", u.getFullName(), "role", u.getRole()
+                "id",            u.getId(),
+                "username",      u.getUsername(),
+                "fullName",      u.getFullName(),
+                "role",          u.getRole(),
+                "portfolioFull", u.isPortfolioFull(),
+                "busdevFull",    u.isBusdevFull(),
+                "pnlAccess",     u.isPnlAccess()
             )))
             .orElse(ResponseEntity.notFound().build());
     }

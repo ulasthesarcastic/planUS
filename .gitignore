@@ -25,4 +25,4 @@ Thumbs.db
 *.log
 
 # DB backups
-*.sql
+backup_*.sql

@@ -6,6 +6,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+// Not persisted — set per-request by ProjectService based on current user's permissions
+
 @Entity
 @Table(name = "projects")
 public class Project extends Auditable {
@@ -34,6 +36,12 @@ public class Project extends Auditable {
     private String projectStatus = "BASLADI"; // POTANSIYEL | BASLADI | DEVAM_EDIYOR | TAMAMLANDI
 
     private int probability = 50; // potansiyel projeler için olasılık (0-100)
+
+    // Mevcut kullanıcının bu proje üzerindeki yetkileri (response'a eklenir, DB'ye yazılmaz)
+    @Transient private boolean myCanRead   = true;
+    @Transient private boolean myCanWrite  = true;
+    @Transient private boolean myCanEdit   = true;
+    @Transient private boolean myCanDelete = true;
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "project_personnel", joinColumns = @JoinColumn(name = "project_id"))
@@ -100,6 +108,14 @@ public class Project extends Auditable {
     public void setProjectStatus(String projectStatus) { this.projectStatus = projectStatus; }
     public int getProbability() { return probability; }
     public void setProbability(int probability) { this.probability = probability; }
+    public boolean isMyCanRead()   { return myCanRead; }
+    public boolean isMyCanWrite()  { return myCanWrite; }
+    public boolean isMyCanEdit()   { return myCanEdit; }
+    public boolean isMyCanDelete() { return myCanDelete; }
+    public void setMyCanRead(boolean v)   { this.myCanRead   = v; }
+    public void setMyCanWrite(boolean v)  { this.myCanWrite  = v; }
+    public void setMyCanEdit(boolean v)   { this.myCanEdit   = v; }
+    public void setMyCanDelete(boolean v) { this.myCanDelete = v; }
     public List<String> getPersonnelIds() { return personnelIds; }
     public void setPersonnelIds(List<String> personnelIds) { this.personnelIds = personnelIds; }
     public List<String> getProductIds() { return productIds; }

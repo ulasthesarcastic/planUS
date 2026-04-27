@@ -89,6 +89,8 @@ export const userApi = {
   create:  (data)     => API.post('/users', data),
   update:  (id, data) => API.put(`/users/${id}`, data),
   delete:  (id)       => API.delete(`/users/${id}`),
+  getPermissions:    (id)         => API.get(`/users/${id}/permissions`),
+  updatePermissions: (id, data)   => API.put(`/users/${id}/permissions`, data),
 };
 
 export const paymentItemApi = {

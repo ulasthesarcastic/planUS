@@ -6,6 +6,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import java.util.Collection;
 import java.util.List;
 
 public interface ProjectRepository extends JpaRepository<Project, String> {
@@ -13,6 +14,7 @@ public interface ProjectRepository extends JpaRepository<Project, String> {
     List<Project> findByCategoryIdIsNull();
     List<Project> findByProjectStatus(String projectStatus);
 
+    /** Admin / portfolioFull kullanıcılar için — tüm projeleri filtrele */
     @Query("SELECT p FROM Project p WHERE " +
            "(:categoryId IS NULL OR p.categoryId = :categoryId) AND " +
            "(:status IS NULL OR p.projectStatus = :status) AND " +
@@ -21,6 +23,20 @@ public interface ProjectRepository extends JpaRepository<Project, String> {
         @Param("categoryId") String categoryId,
         @Param("status") String status,
         @Param("excludeStatus") String excludeStatus,
+        Pageable pageable
+    );
+
+    /** Yetki kısıtlı kullanıcılar: POTANSIYEL projeler + izin verilen ID listesi */
+    @Query("SELECT p FROM Project p WHERE " +
+           "(:categoryId IS NULL OR p.categoryId = :categoryId) AND " +
+           "(:status IS NULL OR p.projectStatus = :status) AND " +
+           "(:excludeStatus IS NULL OR p.projectStatus <> :excludeStatus) AND " +
+           "(p.projectStatus = 'POTANSIYEL' OR p.id IN :allowedIds)")
+    Page<Project> findByFiltersAndAccess(
+        @Param("categoryId") String categoryId,
+        @Param("status") String status,
+        @Param("excludeStatus") String excludeStatus,
+        @Param("allowedIds") Collection<String> allowedIds,
         Pageable pageable
     );
 }

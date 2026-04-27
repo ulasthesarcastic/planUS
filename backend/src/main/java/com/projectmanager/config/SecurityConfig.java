@@ -51,6 +51,19 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/users/**").hasAuthority("ROLE_ADMIN")
+                // Ayarlar: okuma herkese açık, yazma sadece ADMIN
+                .requestMatchers(org.springframework.http.HttpMethod.POST,
+                    "/api/seniorities/**", "/api/personnel/**", "/api/organization/**",
+                    "/api/project-types/**", "/api/project-categories/**",
+                    "/api/cost-types/**", "/api/workflow-steps/**").hasAuthority("ROLE_ADMIN")
+                .requestMatchers(org.springframework.http.HttpMethod.PUT,
+                    "/api/seniorities/**", "/api/personnel/**", "/api/organization/**",
+                    "/api/project-types/**", "/api/project-categories/**",
+                    "/api/cost-types/**", "/api/workflow-steps/**").hasAuthority("ROLE_ADMIN")
+                .requestMatchers(org.springframework.http.HttpMethod.DELETE,
+                    "/api/seniorities/**", "/api/personnel/**", "/api/organization/**",
+                    "/api/project-types/**", "/api/project-categories/**",
+                    "/api/cost-types/**", "/api/workflow-steps/**").hasAuthority("ROLE_ADMIN")
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
