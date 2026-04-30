@@ -401,7 +401,11 @@ export default function SalesPage() {
           seniorities={seniorities}
           onBack={() => setSelectedProject(null)}
           onEdit={(p) => setEditing(p)}
-          onUpdate={() => invalidate.projects()}
+          onUpdate={async () => {
+            const res = await projectApi.getById(selectedProject.id);
+            if (res?.data) setSelectedProject(res.data);
+            invalidate.projects();
+          }}
         />
         {editing && (
           <PotentialProjectModal
