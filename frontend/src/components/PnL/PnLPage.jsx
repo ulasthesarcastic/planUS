@@ -1,12 +1,20 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useAuth } from '../../auth/AuthContext';
-import { useProjects, usePersonnel, useSeniorities, usePotentialSales, useProjectTypes, useOrganization, useAllProjectCosts } from '../../hooks/useQueries';
+import { useQuery } from '@tanstack/react-query';
+import { useProjects, usePersonnel, useSeniorities, usePotentialSales, useOrganization, useAllProjectCosts, useAllSeniorityHistory, useAllProcurements } from '../../hooks/useQueries';
+import { generalExpenseApi } from '../../services/api';
 
 // ── Sabitler & Yardımcılar ────────────────────────────────────────────────────
 
 const MONTHS_SHORT = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
+const MONTHS_LONG  = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
 const COL_W   = 96;
 const LABEL_W = 224;
+const YEARS   = Array.from({ length: 14 }, (_, i) => 2024 + i);
+
+function inPeriod(year, month, sy, sm, ey, em) {
+  return (year > sy || (year === sy && month >= sm)) &&
+         (year < ey || (year === ey && month <= em));
+}
 
 function getRateForMonth(rates = [], year, month) {
   for (const r of rates) {
@@ -44,24 +52,43 @@ function valColor(val) {
 function emptyMonthData(year, month) {
   return {
     year, month,
-    gider: 0, sozlesmeli: 0, potPrije: 0, potSiparis: 0, planSiparis: 0,
+    gider: 0, genExp: 0, sozlesmeli: 0, potPrije: 0, potSiparis: 0,
     gerceklesenGider: 0, gerceklesenGelir: 0,
-    giderBreakdown: [], sozlesmeliBreakdown: [],
+    giderBreakdown: [], genExpBreakdown: [], sozlesmeliBreakdown: [],
     gerceklesenGiderBreakdown: [], gerceklesenGelirBreakdown: [],
-    potPrijeBreakdown: [], potSiparisBreakdown: [], planSiparisBreakdown: [],
+    potPrijeBreakdown: [], potSiparisBreakdown: [],
     gerceklesenToplam: 0, toplam: 0, potansiyelGelir: 0, toplamPotansiyel: 0,
   };
 }
 
 function recalcTotals(d) {
   d.gerceklesenToplam = d.gerceklesenGelir - d.gerceklesenGider;
-  d.toplam            = d.sozlesmeli + d.planSiparis - d.gider;
+  d.toplam            = d.sozlesmeli - d.gider - d.genExp;
   d.potansiyelGelir   = d.potPrije + d.potSiparis;
-  d.toplamPotansiyel  = d.sozlesmeli + d.planSiparis + d.potPrije + d.potSiparis - d.gider;
+  d.toplamPotansiyel  = d.sozlesmeli + d.potPrije + d.potSiparis - d.gider - d.genExp;
+}
+
+// Bir personelin belirli bir ay/yıl için kıdem ID'sini geçmişten bul
+// historyByPersonnel: { [personnelId]: [{seniorityId, startDate, endDate}] }
+function getSeniorityIdForMonth(person, year, month, historyByPersonnel) {
+  const entries = historyByPersonnel[String(person.id)];
+  if (entries && entries.length > 0) {
+    // Tarihe göre sıralı, ilgili dönemdeki kaydı bul
+    const firstOfMonth = new Date(year, month - 1, 1);
+    for (const e of [...entries].sort((a, b) => new Date(b.startDate) - new Date(a.startDate))) {
+      const start = new Date(e.startDate);
+      const end   = e.endDate ? new Date(e.endDate) : null;
+      if (start <= firstOfMonth && (!end || end >= firstOfMonth)) {
+        return String(e.seniorityId);
+      }
+    }
+  }
+  // Geçmiş yoksa mevcut kıdeme dön
+  return String(person.seniorityId);
 }
 
 // Aktif/başlamış/devam eden/tamamlanan proje için gider + sözleşmeli hesapla
-function calcProjectPnL(project, personnelMap, seniorityMap, linkedSiparisler = [], projectCosts = []) {
+function calcProjectPnL(project, personnelMap, seniorityMap, linkedSiparisler = [], projectCosts = [], historyByPersonnel = {}, procurements = []) {
   const months = monthsBetween(
     project.startYear, project.startMonth,
     project.endYear,   project.endMonth,
@@ -72,35 +99,52 @@ function calcProjectPnL(project, personnelMap, seniorityMap, linkedSiparisler = 
     const key = `${year}_${month}`;
     const d = emptyMonthData(year, month);
 
-    // Planlanan Gider (kaynak planı)
-    for (const entry of (project.resourcePlan || [])) {
-      if (entry.year !== year || entry.month !== month) continue;
-      if (entry.planned == null) continue;
-      const person    = personnelMap[String(entry.personnelId)];
-      if (!person) continue;
-      const seniority = seniorityMap[String(person.seniorityId)];
-      if (!seniority) continue;
-      d.gider += getRateForMonth(seniority.rates, year, month) * entry.planned;
+    // Planlanan Gider (kaynak planı) — pnlExcludeExpense ile devre dışı bırakılabilir
+    if (!project.pnlExcludeExpense) {
+      for (const entry of (project.resourcePlan || [])) {
+        if (entry.year !== year || entry.month !== month) continue;
+        if (entry.planned == null) continue;
+        const person    = personnelMap[String(entry.personnelId)];
+        if (!person) continue;
+        const seniorityId = getSeniorityIdForMonth(person, year, month, historyByPersonnel);
+        const seniority   = seniorityMap[seniorityId];
+        if (!seniority) continue;
+        d.gider += getRateForMonth(seniority.rates, year, month) * entry.planned;
+      }
+    }
+    // Planlanan satın alma giderleri — pnlExcludeExpense'ten bağımsız, her zaman dahil
+    for (const p of procurements) {
+      if (p.plannedYear === year && p.plannedMonth === month && p.plannedAmount) {
+        d.gider += Number(p.plannedAmount);
+      }
     }
     if (d.gider > 0) d.giderBreakdown.push({ id: project.id, name: project.name, amount: d.gider });
 
-    // Sözleşmeli Planlanan Gelir — yalnızca ödeme planı kalemlerinden
-    for (const item of (project.paymentPlan || [])) {
-      if (item.plannedYear === year && item.plannedMonth === month)
-        d.sozlesmeli += item.amount || 0;
+    // Sözleşmeli Planlanan Gelir — pnlExcludeRevenue ile devre dışı bırakılabilir
+    if (!project.pnlExcludeRevenue) {
+      for (const item of (project.paymentPlan || [])) {
+        if (item.plannedYear === year && item.plannedMonth === month)
+          d.sozlesmeli += item.amount || 0;
+      }
+      if (d.sozlesmeli > 0) d.sozlesmeliBreakdown.push({ id: project.id, name: project.name, amount: d.sozlesmeli });
     }
-    if (d.sozlesmeli > 0) d.sozlesmeliBreakdown.push({ id: project.id, name: project.name, amount: d.sozlesmeli });
 
-    // Gerçekleşen Gider (Maliyetler sekmesinden girilen veriler)
+    // Gerçekleşen Gider — her zaman dahil edilir
     for (const cost of projectCosts) {
       if (cost.year === year && cost.month === month) {
         d.gerceklesenGider += Number(cost.amount) || 0;
       }
     }
+    // Gerçekleşen satın alma giderleri
+    for (const p of procurements) {
+      if (p.actualYear === year && p.actualMonth === month && p.actualAmount) {
+        d.gerceklesenGider += Number(p.actualAmount);
+      }
+    }
     if (d.gerceklesenGider > 0)
       d.gerceklesenGiderBreakdown.push({ id: project.id, name: project.name, amount: d.gerceklesenGider });
 
-    // Gerçekleşen Proje Geliri (ödeme planı — actualYear/actualMonth alanları)
+    // Gerçekleşen Proje Geliri — her zaman dahil edilir
     for (const item of (project.paymentPlan || [])) {
       if (item.actualYear === year && item.actualMonth === month) {
         const amt = item.actualAmount || item.amount || 0;
@@ -109,13 +153,10 @@ function calcProjectPnL(project, personnelMap, seniorityMap, linkedSiparisler = 
       }
     }
 
-    // Bağlı Potansiyel Siparişler
+    // Bağlı Potansiyel Siparişler (yalnızca AKTIF olanlar — KAZANILDI olanlar payment_items'a dönüşür, sozlesmeli'de sayılır)
     for (const sale of linkedSiparisler) {
       if (sale.targetYear !== year || sale.targetMonth !== month) continue;
-      if (sale.status === 'KAZANILDI') {
-        d.planSiparis += sale.amount || 0;
-        d.planSiparisBreakdown.push({ id: sale.id, name: `📦 ${sale.name}`, amount: sale.amount || 0 });
-      } else if (sale.status === 'AKTIF') {
+      if (sale.status === 'AKTIF') {
         const est = (sale.amount || 0) * (sale.probability || 0) / 100;
         d.potSiparis += est;
         d.potSiparisBreakdown.push({ id: sale.id, name: sale.name, amount: est });
@@ -129,48 +170,47 @@ function calcProjectPnL(project, personnelMap, seniorityMap, linkedSiparisler = 
 }
 
 function sumPnL(monthlyMap) {
-  let gider = 0, sozlesmeli = 0, potPrije = 0, potSiparis = 0, planSiparis = 0,
+  let gider = 0, sozlesmeli = 0, potPrije = 0, potSiparis = 0,
       gerceklesenGider = 0, gerceklesenGelir = 0;
   for (const v of Object.values(monthlyMap)) {
     gider            += v.gider;
     sozlesmeli       += v.sozlesmeli;
     potPrije         += v.potPrije;
     potSiparis       += v.potSiparis;
-    planSiparis      += v.planSiparis;
     gerceklesenGider += v.gerceklesenGider;
     gerceklesenGelir += v.gerceklesenGelir;
   }
   return {
-    gider, sozlesmeli, potPrije, potSiparis, planSiparis,
+    gider, sozlesmeli, potPrije, potSiparis,
     gerceklesenGider, gerceklesenGelir,
     gerceklesenToplam: gerceklesenGelir - gerceklesenGider,
-    toplam:            sozlesmeli + planSiparis - gider,
+    toplam:            sozlesmeli - gider,
     potansiyelGelir:   potPrije + potSiparis,
-    toplamPotansiyel:  sozlesmeli + planSiparis + potPrije + potSiparis - gider,
+    toplamPotansiyel:  sozlesmeli + potPrije + potSiparis - gider,
   };
 }
 
-function aggPnL(activeProjects, potProjects, personnelMap, seniorityMap, allSiparisler, costsByProject = {}) {
+function aggPnL(activeProjects, potProjects, personnelMap, seniorityMap, allSiparisler, costsByProject = {}, historyByPersonnel = {}, procurementsByProject = {}) {
   const agg = {};
 
   const merge = (key, val) => {
     if (!agg[key]) {
       agg[key] = { ...val,
         giderBreakdown:             [...val.giderBreakdown],
+        genExpBreakdown:            [...val.genExpBreakdown],
         sozlesmeliBreakdown:        [...val.sozlesmeliBreakdown],
         gerceklesenGiderBreakdown:  [...val.gerceklesenGiderBreakdown],
         gerceklesenGelirBreakdown:  [...val.gerceklesenGelirBreakdown],
         potPrijeBreakdown:          [...val.potPrijeBreakdown],
         potSiparisBreakdown:        [...val.potSiparisBreakdown],
-        planSiparisBreakdown:       [...val.planSiparisBreakdown],
       };
     } else {
       const a = agg[key];
       a.gider                    += val.gider;
+      a.genExp                   += val.genExp;
       a.sozlesmeli               += val.sozlesmeli;
       a.potPrije                 += val.potPrije;
       a.potSiparis               += val.potSiparis;
-      a.planSiparis              += val.planSiparis;
       a.gerceklesenGider          += val.gerceklesenGider;
       a.gerceklesenGelir          += val.gerceklesenGelir;
       a.gerceklesenToplam         += val.gerceklesenToplam;
@@ -178,12 +218,12 @@ function aggPnL(activeProjects, potProjects, personnelMap, seniorityMap, allSipa
       a.potansiyelGelir           += val.potansiyelGelir;
       a.toplamPotansiyel          += val.toplamPotansiyel;
       a.giderBreakdown             = a.giderBreakdown.concat(val.giderBreakdown);
+      a.genExpBreakdown            = a.genExpBreakdown.concat(val.genExpBreakdown);
       a.sozlesmeliBreakdown        = a.sozlesmeliBreakdown.concat(val.sozlesmeliBreakdown);
       a.gerceklesenGiderBreakdown  = a.gerceklesenGiderBreakdown.concat(val.gerceklesenGiderBreakdown);
       a.gerceklesenGelirBreakdown  = a.gerceklesenGelirBreakdown.concat(val.gerceklesenGelirBreakdown);
       a.potPrijeBreakdown         = a.potPrijeBreakdown.concat(val.potPrijeBreakdown);
       a.potSiparisBreakdown       = a.potSiparisBreakdown.concat(val.potSiparisBreakdown);
-      a.planSiparisBreakdown      = a.planSiparisBreakdown.concat(val.planSiparisBreakdown);
     }
   };
 
@@ -191,23 +231,20 @@ function aggPnL(activeProjects, potProjects, personnelMap, seniorityMap, allSipa
   for (const p of activeProjects) {
     const linked = allSiparisler.filter(s => s.projectId && String(s.projectId) === String(p.id));
     const projectCosts = costsByProject[String(p.id)] || [];
-    const md = calcProjectPnL(p, personnelMap, seniorityMap, linked, projectCosts);
+    const procurements = procurementsByProject[String(p.id)] || [];
+    const md = calcProjectPnL(p, personnelMap, seniorityMap, linked, projectCosts, historyByPersonnel, procurements);
     for (const [key, val] of Object.entries(md)) merge(key, val);
   }
 
-  // Bağlı olmayan siparişler (projectId null)
+  // Bağlı olmayan siparişler (projectId null) — yalnızca AKTIF olanlar
   const unlinkedSiparisler = allSiparisler.filter(s => !s.projectId);
   for (const sale of unlinkedSiparisler) {
+    if (sale.status !== 'AKTIF') continue;
     const key = `${sale.targetYear}_${sale.targetMonth}`;
     if (!agg[key]) agg[key] = emptyMonthData(sale.targetYear, sale.targetMonth);
-    if (sale.status === 'KAZANILDI') {
-      agg[key].planSiparis += sale.amount || 0;
-      agg[key].planSiparisBreakdown.push({ id: sale.id, name: `📦 ${sale.name}`, amount: sale.amount || 0 });
-    } else if (sale.status === 'AKTIF') {
-      const est = (sale.amount || 0) * (sale.probability || 0) / 100;
-      agg[key].potSiparis += est;
-      agg[key].potSiparisBreakdown.push({ id: sale.id, name: sale.name, amount: est });
-    }
+    const est = (sale.amount || 0) * (sale.probability || 0) / 100;
+    agg[key].potSiparis += est;
+    agg[key].potSiparisBreakdown.push({ id: sale.id, name: sale.name, amount: est });
     recalcTotals(agg[key]);
   }
 
@@ -252,8 +289,8 @@ const ROWS = [
   { key: 'gerceklesenToplam', label: 'Toplam',                      bold: true,  color: 'dynamic', expandable: false,      section: 'gerceklesen', sectionEnd: true },
   // ── Planlanan ────────────────────────────────────────────────
   { key: 'sozlesmeli',        label: 'Planlanan Proje Gelirleri',   bold: false, color: '#4ade80', expandable: 'soz',      section: 'planlanan' },
-  { key: 'planSiparis',       label: 'Planlanan Sipariş Geliri',    bold: false, color: '#34d399', expandable: 'plsp',     section: 'planlanan' },
   { key: 'gider',             label: 'Planlanan Gider',             bold: false, color: '#ef4444', expandable: 'gid',      section: 'planlanan' },
+  { key: 'genExp',            label: 'Genel Giderler',              bold: false, color: '#ef4444', expandable: false,      section: 'planlanan' },
   { key: 'toplam',            label: 'Toplam',                      bold: true,  color: 'dynamic', expandable: false,      section: 'planlanan',   sectionEnd: true },
   // ── Potansiyel ───────────────────────────────────────────────
   { key: 'potPrije',          label: 'Potansiyel Proje Geliri',     bold: false, color: '#f59e0b', expandable: 'ppj',      section: 'potansiyel' },
@@ -273,11 +310,11 @@ function MonthlyGrid({ monthlyData }) {
   );
 
   useEffect(() => {
-    if (!scrollRef.current) return;
+    if (!scrollRef.current || months.length === 0) return;
     const idx = months.findIndex(m => m.year === curYear && m.month === curMonth);
     if (idx < 0) return;
-    scrollRef.current.scrollLeft = Math.max(0, LABEL_W + idx * COL_W - 120);
-  }, []); // eslint-disable-line
+    scrollRef.current.scrollLeft = Math.max(0, idx * COL_W - COL_W / 2);
+  }, [months.length]); // eslint-disable-line
 
   // Kırılım listelerini önceden hesapla
   const collectBreakdown = (bdKey) => {
@@ -294,8 +331,6 @@ function MonthlyGrid({ monthlyData }) {
   const allGerceklesenGelirProj  = useMemo(() => collectBreakdown('gerceklesenGelirBreakdown'),  [months, monthlyData]); // eslint-disable-line
   const allPotPrijeProjects      = useMemo(() => collectBreakdown('potPrijeBreakdown'),          [months, monthlyData]); // eslint-disable-line
   const allPotSiparis            = useMemo(() => collectBreakdown('potSiparisBreakdown'),        [months, monthlyData]); // eslint-disable-line
-  const allPlanSiparis           = useMemo(() => collectBreakdown('planSiparisBreakdown'),       [months, monthlyData]); // eslint-disable-line
-
   const stickyCell = (bg, extra = {}) => ({
     minWidth: LABEL_W, width: LABEL_W, padding: '5px 12px',
     fontSize: 12, flexShrink: 0,
@@ -362,7 +397,6 @@ function MonthlyGrid({ monthlyData }) {
                            : expandable === 'grcGelir'? '#22c55e'
                            : expandable === 'ppj'     ? '#f59e0b'
                            : expandable === 'psp'     ? '#60a5fa'
-                           : expandable === 'plsp'    ? '#34d399'
                            : 'var(--accent)';
 
           return (
@@ -402,7 +436,6 @@ function MonthlyGrid({ monthlyData }) {
                   grcGelir:{ list: allGerceklesenGelirProj, bdKey: 'gerceklesenGelirBreakdown',  color: val => val > 0.5 ? '#22c55e' : 'var(--text-muted)' },
                   ppj:     { list: allPotPrijeProjects,     bdKey: 'potPrijeBreakdown',          color: val => val > 0.5 ? '#f59e0b' : 'var(--text-muted)' },
                   psp:     { list: allPotSiparis,           bdKey: 'potSiparisBreakdown',        color: val => val > 0.5 ? '#60a5fa' : 'var(--text-muted)' },
-                  plsp:    { list: allPlanSiparis,          bdKey: 'planSiparisBreakdown',       color: val => val > 0.5 ? '#34d399' : 'var(--text-muted)' },
                 }[expandable];
                 if (!cfg) return null;
                 return cfg.list.map(item => (
@@ -434,12 +467,188 @@ function MonthlyGrid({ monthlyData }) {
 
 // ── Özet Kartı ────────────────────────────────────────────────────────────────
 
-function SummaryCard({ label, activeProjects, potProjects, personnelMap, seniorityMap, siparisler, costsByProject }) {
-  const [open, setOpen] = useState(false);
-  const { totals, monthlyAgg } = useMemo(() => {
-    const agg = aggPnL(activeProjects, potProjects, personnelMap, seniorityMap, siparisler, costsByProject);
-    return { totals: sumPnL(agg), monthlyAgg: agg };
-  }, [activeProjects, potProjects, personnelMap, seniorityMap, siparisler, costsByProject]);
+// ── Dönem Analiz Paneli ───────────────────────────────────────────────────────
+
+function MonthYearSelect({ year, month, onChange }) {
+  const sel = { background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 12, padding: '4px 8px', cursor: 'pointer', fontFamily: 'inherit' };
+  return (
+    <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+      <select value={month} onChange={e => onChange(year, Number(e.target.value))} style={sel}>
+        {MONTHS_LONG.map((n, i) => <option key={i+1} value={i+1}>{n}</option>)}
+      </select>
+      <select value={year} onChange={e => onChange(Number(e.target.value), month)} style={sel}>
+        {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+      </select>
+    </span>
+  );
+}
+
+function SummaryMiniCard({ title, gelir, gider }) {
+  const fark = gelir - gider;
+  const row = (label, val, color) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{label}</span>
+      <span style={{ fontSize: 13, fontWeight: 600, color }}>{fmtK(val)}</span>
+    </div>
+  );
+  return (
+    <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 14px', flex: 1, minWidth: 0 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10, letterSpacing: '0.03em' }}>{title}</div>
+      {row('Gelir', gelir, '#4ade80')}
+      {row('Gider', gider, '#ef4444')}
+      {row('Fark', fark, valColor(fark))}
+    </div>
+  );
+}
+
+function PeriodAnalysisPanel({ monthlyAgg }) {
+  const now = new Date();
+  const curYear = now.getFullYear(), curMonth = now.getMonth() + 1;
+
+  const [sy, setSy] = useState(curYear);
+  const [sm, setSm] = useState(1);        // Ocak'tan başla — gerçekleşen veriler yılın başından gelir
+  const [ey, setEy] = useState(curYear);
+  const [em, setEm] = useState(12);
+
+  const [custom, setCustom] = useState(false);
+
+  const [gSy, setGSy] = useState(curYear); const [gSm, setGSm] = useState(1);
+  const [gEy, setGEy] = useState(curYear); const [gEm, setGEm] = useState(12);
+
+  const [pSy, setPSy] = useState(curYear); const [pSm, setPSm] = useState(curMonth);
+  const [pEy, setPEy] = useState(curYear); const [pEm, setPEm] = useState(12);
+
+  const [potSy, setPotSy] = useState(curYear); const [potSm, setPotSm] = useState(curMonth);
+  const [potEy, setPotEy] = useState(curYear); const [potEm, setPotEm] = useState(12);
+
+  const calc = useMemo(() => {
+    const rSy = custom ? gSy : sy,  rSm = custom ? gSm : sm;
+    const rEy = custom ? gEy : ey,  rEm = custom ? gEm : em;
+    const rPSy = custom ? pSy : sy,  rPSm = custom ? pSm : sm;
+    const rPEy = custom ? pEy : ey,  rPEm = custom ? pEm : em;
+    const rPotSy = custom ? potSy : sy,  rPotSm = custom ? potSm : sm;
+    const rPotEy = custom ? potEy : ey,  rPotEm = custom ? potEm : em;
+
+    let gercGelir = 0, gercGider = 0, planGelir = 0, planGider = 0, potGelir = 0;
+    for (const d of Object.values(monthlyAgg)) {
+      const { year, month } = d;
+      const isCurrentOrFuture = year > curYear || (year === curYear && month >= curMonth);
+
+      if (inPeriod(year, month, rSy, rSm, rEy, rEm)) {
+        gercGelir += d.gerceklesenGelir;
+        gercGider += d.gerceklesenGider;
+      }
+      if (isCurrentOrFuture && inPeriod(year, month, rPSy, rPSm, rPEy, rPEm)) {
+        planGelir += d.sozlesmeli;
+        planGider += d.gider;
+      }
+      if (isCurrentOrFuture && inPeriod(year, month, rPotSy, rPotSm, rPotEy, rPotEm)) {
+        potGelir += d.potSiparis + d.potPrije;
+      }
+    }
+    return { gercGelir, gercGider, planGelir, planGider, potGelir };
+  }, [monthlyAgg, sy, sm, ey, em, custom, gSy, gSm, gEy, gEm, pSy, pSm, pEy, pEm, potSy, potSm, potEy, potEm, curYear, curMonth]);
+
+  const { gercGelir, gercGider, planGelir, planGider, potGelir } = calc;
+  const tahGelir = gercGelir + planGelir;
+  const tahGider = gercGider + planGider;
+
+  const labelStyle = { fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4, display: 'block' };
+  const dashStyle  = { fontSize: 13, color: 'var(--text-muted)', margin: '0 6px' };
+
+  return (
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 18px', marginBottom: 14 }}>
+
+      {/* Periyot satırı */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginRight: 4 }}>Periyot:</span>
+        {!custom ? (
+          <>
+            <MonthYearSelect year={sy} month={sm} onChange={(y, m) => { setSy(y); setSm(m); }} />
+            <span style={dashStyle}>—</span>
+            <MonthYearSelect year={ey} month={em} onChange={(y, m) => { setEy(y); setEm(m); }} />
+          </>
+        ) : (
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>Her bölüm için ayrı periyot seçildi</span>
+        )}
+        <button
+          onClick={() => setCustom(c => !c)}
+          style={{ marginLeft: 'auto', fontSize: 11, padding: '5px 12px', borderRadius: 6, border: '1px solid var(--border)', background: custom ? 'var(--accent)' : 'var(--bg-secondary)', color: custom ? '#fff' : 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
+        >
+          ⚙ Hesaplama tarihlerini özelleştir
+        </button>
+      </div>
+
+      {/* Özelleştirilmiş periyot seçicileri */}
+      {custom && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
+          {[
+            { title: 'Gerçekleşen', sy: gSy, sm: gSm, ey: gEy, em: gEm, setSy: setGSy, setSm: setGSm, setEy: setGEy, setEm: setGEm },
+            { title: 'Planlanan',   sy: pSy, sm: pSm, ey: pEy, em: pEm, setSy: setPSy, setSm: setPSm, setEy: setPEy, setEm: setPEm },
+            { title: 'Potansiyel',  sy: potSy, sm: potSm, ey: potEy, em: potEm, setSy: setPotSy, setSm: setPotSm, setEy: setPotEy, setEm: setPotEm },
+          ].map(({ title, sy, sm, ey, em, setSy, setSm, setEy, setEm }) => (
+            <div key={title} style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px' }}>
+              <span style={labelStyle}>{title} Periyodu</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                <MonthYearSelect year={sy} month={sm} onChange={(y, m) => { setSy(y); setSm(m); }} />
+                <span style={dashStyle}>—</span>
+                <MonthYearSelect year={ey} month={em} onChange={(y, m) => { setEy(y); setEm(m); }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Üst iki büyük kart */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+        <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--accent)', borderRadius: 8, padding: '14px 16px' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)', marginBottom: 12 }}>Tahminlenen Finansal Durum</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Gelir</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#4ade80' }}>{fmtK(tahGelir)}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Gider</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#ef4444' }}>{fmtK(tahGider)}</span>
+          </div>
+          <div style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>Fark</span>
+            <span style={{ fontSize: 15, fontWeight: 800, color: valColor(tahGelir - tahGider) }}>{fmtK(tahGelir - tahGider)}</span>
+          </div>
+        </div>
+
+        <div style={{ background: 'var(--bg-secondary)', border: '1px solid #f59e0b', borderRadius: 8, padding: '14px 16px' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#f59e0b', marginBottom: 12 }}>Tahminlenen Potansiyel</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Gelir</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#4ade80' }}>{fmtK(tahGelir + potGelir)}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Gider</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#ef4444' }}>{fmtK(tahGider)}</span>
+          </div>
+          <div style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>Fark</span>
+            <span style={{ fontSize: 15, fontWeight: 800, color: valColor(tahGelir + potGelir - tahGider) }}>{fmtK(tahGelir + potGelir - tahGider)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Alt üç küçük kart */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+        <SummaryMiniCard title="Gerçekleşen" gelir={gercGelir} gider={gercGider} />
+        <SummaryMiniCard title="Planlanan"   gelir={planGelir} gider={planGider} />
+        <SummaryMiniCard title="Potansiyel"  gelir={potGelir}  gider={0} />
+      </div>
+    </div>
+  );
+}
+
+// ── Tümü Özet Tablosu ─────────────────────────────────────────────────────────
+
+function SummaryCard({ label, monthlyAgg }) {
+  const [open, setOpen] = useState(true);
+  const totals = useMemo(() => sumPnL(monthlyAgg), [monthlyAgg]);
 
   return (
     <div style={{ borderRadius: 8, border: '2px solid var(--accent)', background: 'var(--bg-card)', overflow: 'hidden', marginBottom: 8 }}>
@@ -498,10 +707,10 @@ function ProjectCard({ project, totals, onClick }) {
 
 // ── Proje Detay ───────────────────────────────────────────────────────────────
 
-function ProjectDetail({ project, personnelMap, seniorityMap, linkedSiparisler, projectCosts, onBack }) {
+function ProjectDetail({ project, personnelMap, seniorityMap, linkedSiparisler, projectCosts, historyByPersonnel, procurements, onBack }) {
   const monthlyData = useMemo(
-    () => calcProjectPnL(project, personnelMap, seniorityMap, linkedSiparisler, projectCosts),
-    [project, personnelMap, seniorityMap, linkedSiparisler, projectCosts],
+    () => calcProjectPnL(project, personnelMap, seniorityMap, linkedSiparisler, projectCosts, historyByPersonnel, procurements),
+    [project, personnelMap, seniorityMap, linkedSiparisler, projectCosts, historyByPersonnel, procurements],
   );
   const totals = useMemo(() => sumPnL(monthlyData), [monthlyData]);
 
@@ -623,21 +832,29 @@ function GroupSection({ title, projects, allTotals, onSelect, unitMap = {}, byEm
 // ── Ana Bileşen ───────────────────────────────────────────────────────────────
 
 export default function PnLPage() {
-  const { user } = useAuth();
-  const filterKey = user ? `pnl_filter_${user.username}` : 'pnl_filter';
+  const { data: projects = [] }          = useProjects();
+  const { data: personnel = [] }         = usePersonnel();
+  const { data: seniorities = [] }       = useSeniorities();
+  const { data: potSales = [] }          = usePotentialSales();
+  const { data: units = [] }             = useOrganization();
+  const { data: allCosts = [] }             = useAllProjectCosts();
+  const { data: allSeniorityHistory = [] }  = useAllSeniorityHistory();
+  const { data: allProcurementsData = [] }  = useAllProcurements();
 
-  const { data: projects = [] }     = useProjects();
-  const { data: personnel = [] }    = usePersonnel();
-  const { data: seniorities = [] }  = useSeniorities();
-  const { data: potSales = [] }     = usePotentialSales();
-  const { data: projectTypes = [] } = useProjectTypes();
-  const { data: units = [] }        = useOrganization();
-  const { data: allCosts = [] }     = useAllProjectCosts();
-
-  const [selected, setSelected]     = useState(null);
-  const [typeFilter, setTypeFilter] = useState(() => localStorage.getItem(filterKey) || 'ALL');
+  const [selected, setSelected] = useState(null);
 
   const personnelMap = useMemo(() => Object.fromEntries(personnel.map(p => [p.id, p])), [personnel]);
+
+  // Kıdem geçmişini kişi bazında grupla: { [personnelId]: [{seniorityId, startDate, endDate}] }
+  const historyByPersonnel = useMemo(() => {
+    const map = {};
+    for (const h of allSeniorityHistory) {
+      const pid = String(h.personnelId);
+      if (!map[pid]) map[pid] = [];
+      map[pid].push(h);
+    }
+    return map;
+  }, [allSeniorityHistory]);
   const seniorityMap = useMemo(() => Object.fromEntries(seniorities.map(s => [s.id, s])), [seniorities]);
   // Sadece kök (1. seviye) birimler
   const unitMap = useMemo(() => Object.fromEntries(units.filter(u => !u.parentId).map(u => [String(u.id), u])), [units]);
@@ -652,34 +869,98 @@ export default function PnLPage() {
     return map;
   }, [allCosts]);
 
+  // Satın alma kayıtlarını proje bazında grupla: { [projectId]: [{...}] }
+  const procurementsByProject = useMemo(() => {
+    const map = {};
+    for (const p of allProcurementsData) {
+      const pid = String(p.projectId);
+      if (!map[pid]) map[pid] = [];
+      map[pid].push(p);
+    }
+    return map;
+  }, [allProcurementsData]);
+
   // Aktif projeler (POTANSIYEL olmayanlar) — P&L'de bunlar görünür
   const activeProjects = useMemo(() => projects.filter(p => !p.projectStatus || p.projectStatus !== 'POTANSIYEL'), [projects]);
   const potProjects    = useMemo(() => projects.filter(p => p.projectStatus === 'POTANSIYEL'), [projects]);
   const siparisler     = useMemo(() => potSales.filter(s => s.saleType === 'SIPARIS'), [potSales]);
 
+  const sortedProjects = useMemo(() => [...activeProjects].sort((a, b) => a.name.localeCompare(b.name, 'tr')), [activeProjects]);
+
+  // Genel Giderler
+  const { data: generalExpenses = [] } = useQuery({
+    queryKey: ['general-expenses'],
+    queryFn: () => generalExpenseApi.getAll().then(r => r.data),
+  });
+
+  // Her (yıl_ay) için toplam adam-ay: kişi başı tüm projelerdeki planlama toplanır (çifte sayım yok)
+  const personMonthTotals = useMemo(() => {
+    const byMonthPerson = {}; // { "2026_1": { "pid": toplam } }
+    for (const project of activeProjects) {
+      for (const entry of (project.resourcePlan || [])) {
+        if (entry.planned == null) continue;
+        const key = `${entry.year}_${entry.month}`;
+        if (!byMonthPerson[key]) byMonthPerson[key] = {};
+        const pid = String(entry.personnelId);
+        byMonthPerson[key][pid] = (byMonthPerson[key][pid] || 0) + entry.planned;
+      }
+    }
+    const totals = {};
+    for (const [key, persons] of Object.entries(byMonthPerson)) {
+      totals[key] = Object.values(persons).reduce((s, v) => s + v, 0);
+    }
+    return totals;
+  }, [activeProjects]);
+
+  // Ay bazında genel gider katkısı: toplam adam-ay × o aya denk gelen genel gider tutarları
+  const genExpContrib = useMemo(() => {
+    const result = {};
+    for (const [key, personMonths] of Object.entries(personMonthTotals)) {
+      const [year, month] = key.split('_').map(Number);
+      const applicable = generalExpenses.filter(e =>
+        inPeriod(year, month, e.startYear, e.startMonth, e.endYear, e.endMonth)
+      );
+      const rate = applicable.reduce((s, e) => s + e.amount, 0);
+      if (rate > 0) result[key] = personMonths * rate;
+    }
+    return result;
+  }, [personMonthTotals, generalExpenses]);
+
+  // Tek seferde hesapla — hem PeriodAnalysisPanel hem SummaryCard kullanır
+  const monthlyAgg = useMemo(() => {
+    const base = aggPnL(sortedProjects, potProjects, personnelMap, seniorityMap, siparisler, costsByProject, historyByPersonnel, procurementsByProject);
+    if (Object.keys(genExpContrib).length === 0) return base;
+
+    const result = {};
+    for (const [key, val] of Object.entries(base)) {
+      result[key] = { ...val, giderBreakdown: [...val.giderBreakdown] };
+    }
+    for (const [key, amount] of Object.entries(genExpContrib)) {
+      if (!result[key]) {
+        const [y, m] = key.split('_').map(Number);
+        result[key] = emptyMonthData(y, m);
+      }
+      result[key].genExp += amount;
+      recalcTotals(result[key]);
+    }
+    return result;
+  }, [sortedProjects, potProjects, personnelMap, seniorityMap, siparisler, costsByProject, genExpContrib, historyByPersonnel, procurementsByProject]);
+
   const allTotals = useMemo(() => {
     const map = {};
     for (const p of activeProjects) {
       const linked = siparisler.filter(s => s.projectId && String(s.projectId) === String(p.id));
-      const projectCosts = costsByProject[String(p.id)] || [];
-      map[p.id] = sumPnL(calcProjectPnL(p, personnelMap, seniorityMap, linked, projectCosts));
+      const projectCosts  = costsByProject[String(p.id)]  || [];
+      const procurements  = procurementsByProject[String(p.id)] || [];
+      map[p.id] = sumPnL(calcProjectPnL(p, personnelMap, seniorityMap, linked, projectCosts, historyByPersonnel, procurements));
     }
     return map;
-  }, [activeProjects, personnelMap, seniorityMap, siparisler, costsByProject]);
-
-  const filteredProjects = useMemo(() => {
-    const base = typeFilter === 'ALL'
-      ? activeProjects
-      : activeProjects.filter(p => p.projectType === typeFilter);
-    return [...base].sort((a, b) => a.name.localeCompare(b.name, 'tr'));
-  }, [activeProjects, typeFilter]);
-
-  const selectedTypeName = projectTypes.find(t => t.id === typeFilter)?.name || 'Tümü';
-  const isMusterili = selectedTypeName.toLowerCase() === 'müşterili';
+  }, [activeProjects, personnelMap, seniorityMap, siparisler, costsByProject, historyByPersonnel, procurementsByProject]);
 
   if (selected) {
     const linkedSiparisler = siparisler.filter(s => s.projectId && String(s.projectId) === String(selected.id));
-    const selectedCosts = costsByProject[String(selected.id)] || [];
+    const selectedCosts        = costsByProject[String(selected.id)]       || [];
+    const selectedProcurements = procurementsByProject[String(selected.id)] || [];
     return (
       <ProjectDetail
         project={selected}
@@ -687,6 +968,8 @@ export default function PnLPage() {
         seniorityMap={seniorityMap}
         linkedSiparisler={linkedSiparisler}
         projectCosts={selectedCosts}
+        historyByPersonnel={historyByPersonnel}
+        procurements={selectedProcurements}
         onBack={() => setSelected(null)}
       />
     );
@@ -697,46 +980,25 @@ export default function PnLPage() {
       <div className="page-header">
         <div>
           <div className="page-title">P&amp;L</div>
-          <div className="page-subtitle">{filteredProjects.length} aktif proje</div>
+          <div className="page-subtitle">{activeProjects.length} aktif proje</div>
         </div>
       </div>
 
-      {/* Filtre butonları */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
-        {[...projectTypes.map(t => ({ id: t.id, label: t.name })), { id: 'ALL', label: 'Tümü' }].map(t => (
-          <button key={t.id} onClick={() => { setTypeFilter(t.id); localStorage.setItem(filterKey, t.id); }} style={{
-            padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-            border: '1px solid var(--border)', fontFamily: 'DM Sans, sans-serif',
-            background: typeFilter === t.id ? 'var(--accent)' : 'var(--bg-secondary)',
-            color: typeFilter === t.id ? '#fff' : 'var(--text-secondary)',
-          }}>
-            {t.label} ({typeFilter === t.id || t.id === 'ALL'
-              ? (t.id === 'ALL' ? activeProjects.length : filteredProjects.length)
-              : activeProjects.filter(p => p.projectType === t.id).length})
-          </button>
-        ))}
-      </div>
+      {/* Dönem analiz paneli */}
+      <PeriodAnalysisPanel monthlyAgg={monthlyAgg} />
 
-      {/* Seçilen tipe göre özet */}
-      <SummaryCard
-        label={`${selectedTypeName} Toplamı`}
-        activeProjects={filteredProjects}
-        potProjects={potProjects}
-        personnelMap={personnelMap}
-        seniorityMap={seniorityMap}
-        siparisler={siparisler}
-        costsByProject={costsByProject}
-      />
+      {/* Tümü özet tablosu */}
+      <SummaryCard label="Tümü Toplamı" monthlyAgg={monthlyAgg} />
 
       {/* Proje listesi */}
       <div style={{ marginTop: 20 }}>
         <GroupSection
-          title={selectedTypeName}
-          projects={filteredProjects}
+          title="Tümü"
+          projects={sortedProjects}
           allTotals={allTotals}
           onSelect={setSelected}
           unitMap={unitMap}
-          byEmy={isMusterili}
+          byEmy={false}
         />
       </div>
     </div>

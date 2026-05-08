@@ -4,8 +4,19 @@ import { useAuth } from '../auth/AuthContext';
 import { useCategories } from '../hooks/useQueries';
 import { toSlug } from '../utils/slug';
 export { toSlug };
-import logo from '../assets/logo.png';
-import logoIcon from '../assets/logo-icon.png';
+// Pusula Gülü — inline SVG, png bağımlılığı yok
+function PusulaIcon({ size = 28 }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" width={size} height={size} style={{ color: 'var(--accent)', flexShrink: 0 }}>
+      <circle cx="50" cy="50" r="44" stroke="currentColor" strokeWidth="1.2"/>
+      <circle cx="50" cy="50" r="36" stroke="currentColor" strokeWidth="1" opacity="0.25"/>
+      <path d="M50 8 L54 50 L50 92 L46 50 Z" fill="currentColor"/>
+      <path d="M8 50 L50 46 L92 50 L50 54 Z" fill="currentColor" opacity="0.55"/>
+      <path d="M22 22 L48 48 L50 50 L48 52 L22 78 L24 50 Z" fill="currentColor" opacity="0.18"/>
+      <circle cx="50" cy="50" r="3" fill="var(--bg-card)" stroke="currentColor" strokeWidth="1.5"/>
+    </svg>
+  );
+}
 
 const Icons = {
   Users:    () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
@@ -50,7 +61,7 @@ const CAT_ICONS = {
   star:     () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
 };
 
-const SETTINGS_ROUTES = ['/seniorities', '/personnel', '/organization', '/project-types', '/project-categories', '/cost-types'];
+const SETTINGS_ROUTES = ['/seniorities', '/personnel', '/organization', '/project-types', '/project-categories', '/cost-types', '/general-expenses', '/users'];
 
 export default function Sidebar() {
   const location = useLocation();
@@ -76,13 +87,13 @@ export default function Sidebar() {
     <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>
       {/* Logo area */}
       <div className="sidebar-logo" style={{ paddingBottom: 16, borderBottom: '1px solid var(--border)', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between', gap: 8 }}>
-        <Link to="/" style={{ display: 'block', overflow: 'hidden', flex: 1, minWidth: 0 }}>
-          {collapsed ? (
-            <div style={{ display: 'flex', justifyContent: 'center' }}>
-              <img src={logoIcon} alt="planUS" style={{ width: 32, height: 32, filter: 'brightness(0) invert(1)' }} />
+        <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden', flex: 1, minWidth: 0, textDecoration: 'none' }}>
+          <PusulaIcon size={collapsed ? 30 : 28} />
+          {!collapsed && (
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.2px', lineHeight: 1.1 }}>Pusula</div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.3px', marginTop: 1 }}>Decide before it happens</div>
             </div>
-          ) : (
-            <img src={logo} alt="planUS" style={{ width: '100%', maxWidth: 180, height: 'auto', display: 'block' }} />
           )}
         </Link>
       </div>
@@ -118,6 +129,17 @@ export default function Sidebar() {
             <NavLink to="/cost-types" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Maliyet Tipleri">
               <Icons.DollarSign />{!collapsed && <span className="nav-item-label">Maliyet Tipleri</span>}
             </NavLink>
+            <NavLink to="/general-expenses" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Genel Giderler">
+              <Icons.DollarSign />{!collapsed && <span className="nav-item-label">Genel Giderler</span>}
+            </NavLink>
+            {user?.role === 'ADMIN' && (
+              <>
+                {!collapsed && <div className="sidebar-section-label" style={{ marginTop: 8 }}>Sistem</div>}
+                <NavLink to="/users" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Kullanıcı Yönetimi">
+                  <Icons.Users />{!collapsed && <span className="nav-item-label">Kullanıcılar</span>}
+                </NavLink>
+              </>
+            )}
             {!collapsed && <div className="sidebar-section-label" style={{ marginTop: 8 }}>Kaynaklar</div>}
             <NavLink to="/seniorities" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Kıdem Yönetimi">
               <Icons.Award />{!collapsed && <span className="nav-item-label">Kıdem Yönetimi</span>}

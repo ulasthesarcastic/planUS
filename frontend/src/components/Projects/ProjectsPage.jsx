@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
+import debounce from 'lodash/debounce';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { useToast } from '../Toast/Toaster';
-import { projectApi, organizationApi, projectCategoryApi, potentialSaleApi, projectCostApi, paymentItemApi } from '../../services/api';
+import { projectApi, organizationApi, projectCategoryApi, potentialSaleApi, projectCostApi, paymentItemApi, procurementApi } from '../../services/api';
 import {
   useProjects, useProjectsPaged, usePersonnel, useProducts, useOrganization,
   useSeniorities, usePotentialSales, useProjectTypes, useCategories,
   useAllWorkflowSteps, useInvalidate, useCostTypes, useProjectCosts, useAllProjectCosts,
+  useProcurements,
 } from '../../hooks/useQueries';
 import SearchableSelect from '../SearchableSelect';
 import PersonnelSearchSelect from '../PersonnelSearchSelect';
@@ -99,9 +101,11 @@ function getRateForMonth(rates, year, month) {
   return 0;
 }
 
-function analyzeBudget(project, personnelMap, seniorityMap) {
+function analyzeBudget(project, personnelMap, seniorityMap, incurredCost = 0) {
   const now = new Date();
-  const analysisMonth = now.getMonth() + 1;
+  // Bir sonraki aydan başla (BudgetPage ile tutarlı)
+  const curMonth      = now.getMonth() + 1;
+  const analysisMonth = curMonth < 12 ? curMonth + 1 : 12;
   const analysisYear  = now.getFullYear();
   let plannedCost = 0;
   const monthlyCosts = {};
@@ -122,11 +126,12 @@ function analyzeBudget(project, personnelMap, seniorityMap) {
     monthlyCosts[key] = (monthlyCosts[key] || 0) + cost;
     plannedCost += cost;
   }
-  const budget         = project.budget        || 0;
-  const potentialSales = project.potentialSales || 0;
-  const totalAvailable = budget + potentialSales;
+  // Kalan bütçe (BudgetPage ile tutarlı: gerçekleşen maliyetler düşülür)
+  const remainingBudget = Math.max(0, (project.budget || 0) - incurredCost);
+  const potentialSales  = project.potentialSales || 0;
+  const totalAvailable  = remainingBudget + potentialSales;
   const diff = totalAvailable - plannedCost;
-  const hasData = budget > 0 || potentialSales > 0;
+  const hasData = (project.budget || 0) > 0 || potentialSales > 0;
   let eksiyeAy = null;
   let cumCost = 0;
   for (let m = analysisMonth; m <= 12; m++) {
@@ -141,10 +146,34 @@ function analyzeBudget(project, personnelMap, seniorityMap) {
 
 function BackIcon() { return <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>; }
 
+// ── Personnel active period check ────────────────────────────────────────────
+function isPersonnelActive(person, year, month) {
+  if (person.startDate) {
+    const [sy, sm] = person.startDate.split('-').map(Number);
+    if (year < sy || (year === sy && month < sm)) return false;
+  }
+  if (person.endDate) {
+    const [ey, em] = person.endDate.split('-').map(Number);
+    if (year > ey || (year === ey && month > em)) return false;
+  }
+  return true;
+}
+
 // ── PctInput ─────────────────────────────────────────────────────────────────
-function PctInput({ value, onChange, isModified }) {
+function PctInput({ value, onChange, isModified, disabled }) {
   const [local, setLocal] = useState(value == null ? '' : String(value));
   useEffect(() => { setLocal(value == null ? '' : String(value)); }, [value]);
+
+  if (disabled) {
+    return (
+      <div title="Bu kişi bu dönemde aktif değil" style={{
+        width: 28, height: 20, margin: '0 auto',
+        background: 'repeating-linear-gradient(135deg, transparent, transparent 3px, rgba(128,128,128,0.18) 3px, rgba(128,128,128,0.18) 4px)',
+        borderRadius: 2,
+      }} />
+    );
+  }
+
   const commit = () => {
     const raw = local.trim().replace('%', '');
     if (raw === '') { onChange(null); return; }
@@ -262,6 +291,9 @@ function PlanningTab({ project, allPersonnel, units, seniorities, onReload }) {
   const curYear  = now.getFullYear();
   const curMonth = now.getMonth() + 1;
 
+  // myCanWrite: backend'den geliyor (ADMIN + portfolioFull → default true; kısıtlı kullanıcılarda DB'den set edilir)
+  const canWrite = project.myCanWrite !== false; // undefined/true → true
+
   const [localProject, setLocalProject] = useState(project);
   const [localPlan, setLocalPlan]       = useState({});
   const [originalPlan, setOriginalPlan] = useState({});
@@ -269,6 +301,12 @@ function PlanningTab({ project, allPersonnel, units, seniorities, onReload }) {
   const [bulkPerson, setBulkPerson]     = useState(null);
   const [addingResource, setAddingResource] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+
+  // onReload'ı ref'te tut → debounce fonksiyonu her render'da yeniden oluşmasın
+  const onReloadRef = useRef(onReload);
+  onReloadRef.current = onReload;
+  const debouncedReload = useRef(debounce(() => onReloadRef.current?.(), 1500)).current;
+  useEffect(() => () => debouncedReload.cancel(), [debouncedReload]);
 
   const tableContainerRef = useRef(null);
 
@@ -347,6 +385,7 @@ function PlanningTab({ project, allPersonnel, units, seniorities, onReload }) {
   };
 
   const setVal = async (pid, y, m, type, val) => {
+    if (!canWrite) return; // read-only: yazma yetkisi yok
     const key = `${pid}_${y}_${m}`;
     setLocalPlan(prev => ({ ...prev, [key]: { ...prev[key], [type]: val } }));
     const updatedEntry = { ...localPlan[key], [type]: val };
@@ -358,10 +397,14 @@ function PlanningTab({ project, allPersonnel, units, seniorities, onReload }) {
         resourcePlan.push({ personnelId: p, year: +yr, month: +mo, need: toDb(vals.need), planned: toDb(vals.planned) });
       }
     }
-    try { await projectApi.updateResourcePlan(localProject.id, resourcePlan); } catch (e) { console.error('Auto-save failed', e); }
+    try {
+      await projectApi.updateResourcePlan(localProject.id, resourcePlan);
+      debouncedReload(); // parent state + RQ cache'i gecikmeli güncelle
+    } catch (e) { console.error('Auto-save failed', e); }
   };
 
   const handleBulkSave = async updates => {
+    if (!canWrite) { setBulkPerson(null); return; }
     const newPlan = { ...localPlan };
     for (const [key, vals] of Object.entries(updates)) {
       newPlan[key] = { ...newPlan[key] };
@@ -377,7 +420,10 @@ function PlanningTab({ project, allPersonnel, units, seniorities, onReload }) {
         resourcePlan.push({ personnelId: p, year: +yr, month: +mo, need: toDb(vals.need), planned: toDb(vals.planned) });
       }
     }
-    try { await projectApi.updateResourcePlan(localProject.id, resourcePlan); } catch (e) { console.error('Bulk auto-save failed', e); }
+    try {
+      await projectApi.updateResourcePlan(localProject.id, resourcePlan);
+      onReload?.(); // toplu kayıtta hemen güncelle
+    } catch (e) { console.error('Bulk auto-save failed', e); }
   };
 
   const handleAddResource = async personId => {
@@ -385,6 +431,7 @@ function PlanningTab({ project, allPersonnel, units, seniorities, onReload }) {
     await projectApi.updatePersonnel(localProject.id, [...newIds]);
     setLocalProject(prev => ({ ...prev, personnelIds: [...newIds] }));
     setAddingResource(false);
+    onReload?.();
   };
 
   const handleDeleteResource = async person => {
@@ -406,6 +453,7 @@ function PlanningTab({ project, allPersonnel, units, seniorities, onReload }) {
         }
       }
       await projectApi.updateResourcePlan(localProject.id, resourcePlan);
+      onReload?.();
     } catch (e) { console.error('Delete resource failed', e); }
   };
 
@@ -437,24 +485,26 @@ function PlanningTab({ project, allPersonnel, units, seniorities, onReload }) {
         {saving && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Kaydediliyor...</span>}
       </div>
 
-      {/* Add resource bar */}
-      <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-        {addingResource ? (
-          <>
-            <PersonnelSearchSelect
-              value=""
-              onChange={handleAddResource}
-              excludeIds={[...personnelIdSet]}
-              placeholder="Personel seçin..."
-              style={{ minWidth: 240 }} />
-            <button onClick={() => setAddingResource(false)} style={{ padding: '4px 10px', borderRadius: 5, border: '1px solid var(--border)', background: 'var(--bg-hover)', cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)', fontFamily: 'DM Sans, sans-serif' }}>İptal</button>
-          </>
-        ) : (
-          <button onClick={() => setAddingResource(true)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 5, border: '1px dashed var(--border)', background: 'transparent', cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)', fontFamily: 'DM Sans, sans-serif' }}>
-            <PlusIcon /> Kaynak Ekle
-          </button>
-        )}
-      </div>
+      {/* Add resource bar — sadece canWrite varsa göster */}
+      {canWrite && (
+        <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+          {addingResource ? (
+            <>
+              <PersonnelSearchSelect
+                value=""
+                onChange={handleAddResource}
+                excludeIds={[...personnelIdSet]}
+                placeholder="Personel seçin..."
+                style={{ minWidth: 240 }} />
+              <button onClick={() => setAddingResource(false)} style={{ padding: '4px 10px', borderRadius: 5, border: '1px solid var(--border)', background: 'var(--bg-hover)', cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)', fontFamily: 'DM Sans, sans-serif' }}>İptal</button>
+            </>
+          ) : (
+            <button onClick={() => setAddingResource(true)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 5, border: '1px dashed var(--border)', background: 'transparent', cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)', fontFamily: 'DM Sans, sans-serif' }}>
+              <PlusIcon /> Kaynak Ekle
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Table */}
       <div ref={tableContainerRef} style={{ overflowX: 'auto' }}>
@@ -516,18 +566,21 @@ function PlanningTab({ project, allPersonnel, units, seniorities, onReload }) {
                       <td style={{ padding: '3px 12px', position: 'sticky', left: 0, zIndex: 1, background: pi % 2 === 0 ? 'var(--bg-card)' : 'var(--bg-secondary)', borderRight: '2px solid var(--border)', whiteSpace: 'nowrap' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                           <span style={{ fontWeight: 500, fontSize: 12, color: grp.nameColor }}>{person.firstName} {person.lastName}</span>
-                          <button onClick={() => setBulkPerson(person)} title="Toplu atama"
-                            style={{ padding: '1px 5px', fontSize: 9, background: 'var(--bg-hover)', border: '1px solid var(--border)', borderRadius: 3, cursor: 'pointer', color: 'var(--text-muted)', fontFamily: 'DM Sans, sans-serif', flexShrink: 0 }}>
-                            Toplu
-                          </button>
-                          <button onClick={() => setDeleteConfirm(person)} title="Kaynağı sil"
-                            style={{ padding: '1px 5px', fontSize: 9, background: 'transparent', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 3, cursor: 'pointer', color: '#f87171', fontFamily: 'DM Sans, sans-serif', flexShrink: 0 }}>
-                            Sil
-                          </button>
+                          {canWrite && <>
+                            <button onClick={() => setBulkPerson(person)} title="Toplu atama"
+                              style={{ padding: '1px 5px', fontSize: 9, background: 'var(--bg-hover)', border: '1px solid var(--border)', borderRadius: 3, cursor: 'pointer', color: 'var(--text-muted)', fontFamily: 'DM Sans, sans-serif', flexShrink: 0 }}>
+                              Toplu
+                            </button>
+                            <button onClick={() => setDeleteConfirm(person)} title="Kaynağı sil"
+                              style={{ padding: '1px 5px', fontSize: 9, background: 'transparent', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 3, cursor: 'pointer', color: '#f87171', fontFamily: 'DM Sans, sans-serif', flexShrink: 0 }}>
+                              Sil
+                            </button>
+                          </>}
                         </div>
                       </td>
                       {months.map(({ month, year }) => {
                         const isCur = year === curYear && month === curMonth;
+                        const active = isPersonnelActive(person, year, month);
                         return TYPES.map(type => {
                           const v = getVal(person.id, year, month, type);
                           const modified = isModified(person.id, year, month, type);
@@ -535,8 +588,12 @@ function PlanningTab({ project, allPersonnel, units, seniorities, onReload }) {
                             <td key={`${year}_${month}_${type}`}
                               style={{ padding: '1px 0', textAlign: 'center',
                                 borderLeft: type === 'need' ? '1px solid var(--border)' : 'none',
-                                background: modified ? 'rgba(251,191,36,0.12)' : v != null ? `${TYPE_COLORS[type]}1a` : isCur ? 'rgba(99,102,241,0.03)' : 'transparent' }}>
-                              <PctInput value={v} onChange={val => setVal(person.id, year, month, type, val)} isModified={modified} />
+                                background: !active
+                                  ? 'rgba(128,128,128,0.07)'
+                                  : modified ? 'rgba(251,191,36,0.12)'
+                                  : v != null ? `${TYPE_COLORS[type]}1a`
+                                  : isCur ? 'rgba(99,102,241,0.03)' : 'transparent' }}>
+                              <PctInput value={v} onChange={val => active && canWrite && setVal(person.id, year, month, type, val)} isModified={modified} disabled={!active || !canWrite} />
                             </td>
                           );
                         });
@@ -595,8 +652,9 @@ function PlanningTab({ project, allPersonnel, units, seniorities, onReload }) {
 // ── Project card with budget analysis coloring ───────────────────────────────
 function ProjectCard({ project, personnel, personnelMap, seniorityMap, categoryMap = {}, stepMap = {}, costsByProjectId = {}, onClick, onEdit, onDelete, onMoveToPotensiyal }) {
   const mgr = personnel.find(p => String(p.id) === String(project.projectManagerId));
-  const analysis = (personnelMap && seniorityMap) ? analyzeBudget(project, personnelMap, seniorityMap) : { status: 'nodata' };
-  const remainingBudget = (project.budget || 0) - (costsByProjectId[project.id] || 0);
+  const incurredCost = costsByProjectId[project.id] || 0;
+  const analysis = (personnelMap && seniorityMap) ? analyzeBudget(project, personnelMap, seniorityMap, incurredCost) : { status: 'nodata' };
+  const remainingBudget = Math.max(0, (project.budget || 0) - incurredCost);
   const isAcik = analysis.status === 'acik';
   const [hovered, setHovered] = useState(false);
   const [moving, setMoving] = useState(false);
@@ -1703,9 +1761,209 @@ function AmountCostInput({ value, onChange }) {
   );
 }
 
+// ── Satın Alma Tab ───────────────────────────────────────────────
+const MONTHS_FULL_SA = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+const CUR_YEAR_SA = new Date().getFullYear();
+const YEARS_SA = Array.from({ length: 15 }, (_, i) => CUR_YEAR_SA - 5 + i);
+
+function emptyProcurement() {
+  return {
+    _key: Math.random(),
+    description: '',
+    plannedAmount: '', plannedMonth: null, plannedYear: null,
+    actualAmount: '',  actualMonth: null,  actualYear: null,
+  };
+}
+
+function SatinAlmaTab({ project }) {
+  const { data: rawItems, isLoading, isSuccess } = useProcurements(project.id);
+  const invalidate = useInvalidate();
+  const toast = useToast();
+  const [items, setItems] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const canWrite = project.myCanWrite !== false;
+
+  useEffect(() => {
+    if (!isSuccess) return; // sorgu başarısız/yükleniyor → yerel state'e dokunma
+    setItems((rawItems || []).map(r => ({
+      _key: r.id,
+      id: r.id,
+      description:   r.description || '',
+      plannedAmount: r.plannedAmount != null ? String(r.plannedAmount) : '',
+      plannedMonth:  r.plannedMonth  || null,
+      plannedYear:   r.plannedYear   || null,
+      actualAmount:  r.actualAmount  != null ? String(r.actualAmount)  : '',
+      actualMonth:   r.actualMonth   || null,
+      actualYear:    r.actualYear    || null,
+    })));
+  }, [rawItems, isSuccess]);
+
+  const update = (idx, field, val) =>
+    setItems(prev => prev.map((it, i) => i === idx ? { ...it, [field]: val } : it));
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const payload = items.map(it => ({
+        description:   it.description || null,
+        plannedAmount: it.plannedAmount !== '' ? Number(String(it.plannedAmount).replace(/\./g, '').replace(',', '.')) : null,
+        plannedMonth:  it.plannedMonth  || null,
+        plannedYear:   it.plannedYear   || null,
+        actualAmount:  it.actualAmount  !== '' ? Number(String(it.actualAmount).replace(/\./g, '').replace(',', '.'))  : null,
+        actualMonth:   it.actualMonth   || null,
+        actualYear:    it.actualYear    || null,
+      }));
+      await procurementApi.saveAll(project.id, payload);
+      invalidate.procurements(project.id);
+      toast.success('Satın alma kayıtları kaydedildi.');
+    } catch (e) {
+      toast.error('Kayıt başarısız.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const fmtMoney = v => v && !isNaN(Number(v)) ? Number(v).toLocaleString('tr-TR') : '';
+
+  const thStyle = { padding: '6px 10px', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', textAlign: 'left', background: 'var(--bg-secondary)', borderBottom: '2px solid var(--border)', whiteSpace: 'nowrap' };
+  const tdStyle = { padding: '6px 8px', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' };
+  const selStyle = { background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 5, color: 'var(--text-primary)', fontSize: 12, padding: '4px 6px', fontFamily: 'inherit', minWidth: 0 };
+
+  if (isLoading) return <div style={{ padding: 24, color: 'var(--text-muted)' }}>Yükleniyor...</div>;
+
+  // Toplam özet
+  const totalPlanned = items.reduce((s, it) => s + (parseFloat(it.plannedAmount) || 0), 0);
+  const totalActual  = items.reduce((s, it) => s + (parseFloat(it.actualAmount)  || 0), 0);
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+        <span style={{ fontSize: 13, color: 'var(--text-muted)', flex: 1 }}>
+          {items.length > 0
+            ? `${items.length} satın alma kalemi · Planlanan: ${totalPlanned.toLocaleString('tr-TR')} ${project.budgetCurrency || '₺'} · Gerçekleşen: ${totalActual.toLocaleString('tr-TR')} ${project.budgetCurrency || '₺'}`
+            : 'Henüz satın alma kalemi yok.'}
+        </span>
+        {canWrite && (
+          <button className="btn btn-ghost" style={{ fontSize: 12 }}
+            onClick={() => setItems(prev => [...prev, emptyProcurement()])}>
+            + Kalem Ekle
+          </button>
+        )}
+        {canWrite && (
+          <button className="btn btn-primary" style={{ fontSize: 12 }} disabled={saving} onClick={handleSave}>
+            {saving ? 'Kaydediliyor…' : 'Kaydet'}
+          </button>
+        )}
+      </div>
+
+      {items.length === 0 ? (
+        <div className="empty-state" style={{ padding: '32px 0' }}>
+          <p>Satın alma kalemi yok. "+ Kalem Ekle" ile başlayın.</p>
+        </div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%', minWidth: 860 }}>
+            <thead>
+              <tr>
+                <th style={{ ...thStyle, width: '30%' }}>Açıklama</th>
+                <th style={{ ...thStyle, textAlign: 'right' }}>Planlanan Tutar</th>
+                <th style={{ ...thStyle }}>Plan. Ay / Yıl</th>
+                <th style={{ ...thStyle, textAlign: 'right' }}>Gerçekleşen Tutar</th>
+                <th style={{ ...thStyle }}>Gerç. Ay / Yıl</th>
+                {canWrite && <th style={{ ...thStyle, width: 36 }}></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((it, idx) => (
+                <tr key={it._key} style={{ background: idx % 2 === 0 ? 'var(--bg-card)' : 'var(--bg-alt-row)' }}>
+                  <td style={tdStyle}>
+                    <input className="form-input" value={it.description} placeholder="Açıklama"
+                      style={{ fontSize: 12 }}
+                      onChange={e => update(idx, 'description', e.target.value)} />
+                  </td>
+                  <td style={{ ...tdStyle, textAlign: 'right' }}>
+                    <input className="form-input" value={fmtMoney(it.plannedAmount)} placeholder="0"
+                      style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 12, width: 120 }}
+                      onChange={e => {
+                        const raw = e.target.value.replace(/\./g, '').replace(/[^0-9]/g, '');
+                        update(idx, 'plannedAmount', raw ? Number(raw) : '');
+                      }} />
+                  </td>
+                  <td style={tdStyle}>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <select style={selStyle} value={it.plannedMonth || ''}
+                        onChange={e => update(idx, 'plannedMonth', e.target.value ? +e.target.value : null)}>
+                        <option value="">Ay</option>
+                        {MONTHS_FULL_SA.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
+                      </select>
+                      <select style={selStyle} value={it.plannedYear || ''}
+                        onChange={e => update(idx, 'plannedYear', e.target.value ? +e.target.value : null)}>
+                        <option value="">Yıl</option>
+                        {YEARS_SA.map(y => <option key={y} value={y}>{y}</option>)}
+                      </select>
+                    </div>
+                  </td>
+                  <td style={{ ...tdStyle, textAlign: 'right' }}>
+                    <input className="form-input" value={fmtMoney(it.actualAmount)} placeholder="0"
+                      style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 12, width: 120 }}
+                      onChange={e => {
+                        const raw = e.target.value.replace(/\./g, '').replace(/[^0-9]/g, '');
+                        update(idx, 'actualAmount', raw ? Number(raw) : '');
+                      }} />
+                  </td>
+                  <td style={tdStyle}>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <select style={selStyle} value={it.actualMonth || ''}
+                        onChange={e => update(idx, 'actualMonth', e.target.value ? +e.target.value : null)}>
+                        <option value="">Ay</option>
+                        {MONTHS_FULL_SA.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
+                      </select>
+                      <select style={selStyle} value={it.actualYear || ''}
+                        onChange={e => update(idx, 'actualYear', e.target.value ? +e.target.value : null)}>
+                        <option value="">Yıl</option>
+                        {YEARS_SA.map(y => <option key={y} value={y}>{y}</option>)}
+                      </select>
+                    </div>
+                  </td>
+                  {canWrite && (
+                    <td style={{ ...tdStyle, textAlign: 'center' }}>
+                      <button title="Sil"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 16, lineHeight: 1, padding: '2px 6px' }}
+                        onClick={() => setItems(prev => prev.filter((_, i) => i !== idx))}>
+                        ×
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+            {items.length > 1 && (
+              <tfoot>
+                <tr style={{ borderTop: '2px solid var(--border)', background: 'var(--bg-secondary)' }}>
+                  <td style={{ padding: '6px 10px', fontWeight: 600, fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Toplam</td>
+                  <td style={{ padding: '6px 10px', textAlign: 'right', fontFamily: 'DM Mono, monospace', fontWeight: 700, color: 'var(--accent)' }}>
+                    {totalPlanned > 0 ? totalPlanned.toLocaleString('tr-TR') : '—'}
+                  </td>
+                  <td style={{ padding: '6px 10px' }}></td>
+                  <td style={{ padding: '6px 10px', textAlign: 'right', fontFamily: 'DM Mono, monospace', fontWeight: 700, color: '#22c55e' }}>
+                    {totalActual > 0 ? totalActual.toLocaleString('tr-TR') : '—'}
+                  </td>
+                  <td colSpan={canWrite ? 2 : 1}></td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CostsTab({ project, onReload }) {
   const { data: allCostTypes = [] } = useCostTypes();
   const { data: rawCosts = [], isLoading } = useProjectCosts(project.id);
+  const { data: procurements = [] } = useProcurements(project.id);
+  const invalidate = useInvalidate();
 
   // localCosts: { [costTypeId_year_month]: amount }
   const [localCosts, setLocalCosts] = useState({});
@@ -1754,6 +2012,8 @@ function CostsTab({ project, onReload }) {
         }
       }
       await projectCostApi.saveAll(project.id, payload);
+      invalidate.projectCosts(project.id);
+      invalidate.allProjectCosts(); // P&L sayfası allProjectCosts kullanıyor
     } catch (e) { console.error('Cost save failed', e); }
     finally {
       savingRef.current = false;
@@ -1894,6 +2154,42 @@ function CostsTab({ project, onReload }) {
                 </tr>
               ))}
             </tbody>
+            {/* Satın Alma (Gerçekleşen) — read-only satır */}
+            {procurements.some(p => p.actualAmount && p.actualMonth && p.actualYear) && (() => {
+              // ay bazında gerçekleşen satın alma tutarları
+              const procByMonth = {};
+              for (const p of procurements) {
+                if (!p.actualAmount || !p.actualMonth || !p.actualYear) continue;
+                const key = `${p.actualYear}_${p.actualMonth}`;
+                procByMonth[key] = (procByMonth[key] || 0) + Number(p.actualAmount);
+              }
+              const procRowTotal = Object.values(procByMonth).reduce((s, v) => s + v, 0);
+              return (
+                <tbody>
+                  <tr style={{ borderTop: '2px solid var(--border)', borderBottom: '1px solid var(--border)', background: 'rgba(34,197,94,0.06)' }}>
+                    <td style={{ padding: '5px 10px', position: 'sticky', left: 0, background: 'rgba(34,197,94,0.06)', zIndex: 1,
+                                 display: 'flex', alignItems: 'center', gap: 6, minHeight: 34 }}>
+                      <span style={{ flex: 1, fontWeight: 600, color: '#22c55e', fontSize: 12 }}>Satın Alma (Gerçekleşen)</span>
+                    </td>
+                    {months.map(({ month, year }) => {
+                      const v = procByMonth[`${year}_${month}`] || 0;
+                      return (
+                        <td key={`${year}_${month}`}
+                          style={{ padding: '5px 8px', textAlign: 'right', borderLeft: '1px solid var(--border)',
+                                   fontFamily: 'DM Mono, monospace', fontSize: 11,
+                                   color: v > 0 ? '#22c55e' : 'var(--text-muted)' }}>
+                          {v > 0 ? fmtMoney(v) : '—'}
+                        </td>
+                      );
+                    })}
+                    <td style={{ padding: '5px 10px', textAlign: 'right', fontFamily: 'DM Mono, monospace',
+                                 fontWeight: 600, color: '#22c55e', whiteSpace: 'nowrap' }}>
+                      {fmtMoney(procRowTotal)}
+                    </td>
+                  </tr>
+                </tbody>
+              );
+            })()}
             <tfoot>
               <tr style={{ borderTop: '2px solid var(--border)', background: 'var(--bg-secondary)' }}>
                 <td style={{ padding: '6px 10px', position: 'sticky', left: 0, background: 'var(--bg-secondary)',
@@ -1924,6 +2220,74 @@ function CostsTab({ project, onReload }) {
   );
 }
 
+// ── Hesaplama Tab ────────────────────────────────────────────────
+function HesaplamaTab({ project, onUpdate }) {
+  const [saving, setSaving] = useState(false);
+  const [excludeRevenue, setExcludeRevenue] = useState(!!project.pnlExcludeRevenue);
+  const [excludeExpense, setExcludeExpense] = useState(!!project.pnlExcludeExpense);
+
+  const save = async (newRevenue, newExpense) => {
+    setSaving(true);
+    try {
+      await projectApi.update(project.id, {
+        ...project,
+        pnlExcludeRevenue: newRevenue,
+        pnlExcludeExpense: newExpense,
+      });
+      await onUpdate();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggle = (field, val) => {
+    if (field === 'revenue') { setExcludeRevenue(val); save(val, excludeExpense); }
+    else                     { setExcludeExpense(val); save(excludeRevenue, val); }
+  };
+
+  const checkRow = (label, desc, checked, onChange) => (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: '16px 0', borderBottom: '1px solid var(--border)' }}>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={e => onChange(e.target.checked)}
+        disabled={saving}
+        style={{ marginTop: 2, width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--accent)' }}
+      />
+      <div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>{label}</div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{desc}</div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ maxWidth: 560 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+        P&L Hesaplamaya Dahil Etme
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
+        İşaretlenen kalemler bu projeye ait planlanan gelir/gider hesaplamalarından çıkarılır. Gerçekleşen veriler her zaman dahil edilir.
+      </div>
+
+      {checkRow(
+        'Gelirleri Dahil Etme',
+        'Bu projenin planlanan gelir kalemleri (ödeme planı) P&L\'den çıkarılır. Gerçekleşen gelir etkilenmez.',
+        excludeRevenue,
+        val => toggle('revenue', val),
+      )}
+      {checkRow(
+        'Giderleri Dahil Etme',
+        'Bu projenin planlanan gider kalemleri (kaynak planı) P&L\'den çıkarılır. Gerçekleşen maliyetler etkilenmez.',
+        excludeExpense,
+        val => toggle('expense', val),
+      )}
+
+      {saving && <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-muted)' }}>Kaydediliyor…</div>}
+    </div>
+  );
+}
+
 // ── PROJE DETAY EKRANI ───────────────────────────────────────────
 export function ProjectDetail({ project, allPersonnel, allProducts, units, seniorities, onBack, onEdit, onUpdate }) {
   const [activeTab, setActiveTab] = useState('planning');
@@ -1934,6 +2298,8 @@ export function ProjectDetail({ project, allPersonnel, allProducts, units, senio
     { id:'products',   label:'Ürünler' },
     { id:'budget',     label:'Bütçe' },
     { id:'costs',      label:'Maliyetler' },
+    { id:'satinalma',  label:'Satın Alma' },
+    { id:'hesaplama',  label:'Hesaplama' },
   ];
   const projectAmount = (project.paymentPlan||[]).reduce((s,i) => s+(i.amount||0), 0);
 
@@ -1995,6 +2361,8 @@ export function ProjectDetail({ project, allPersonnel, allProducts, units, senio
         {activeTab==='products' && <ProductsTab project={project} allProducts={allProducts} onUpdate={onUpdate} />}
         {activeTab==='budget' && <BudgetTab project={project} onUpdate={onUpdate} />}
         {activeTab==='costs' && <CostsTab project={project} onReload={onUpdate} />}
+        {activeTab==='satinalma' && <SatinAlmaTab project={project} />}
+        {activeTab==='hesaplama' && <HesaplamaTab project={project} onUpdate={onUpdate} />}
       </div>
     </div>
   );

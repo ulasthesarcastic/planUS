@@ -2,6 +2,7 @@ package com.projectmanager.service;
 
 import com.projectmanager.model.ProjectCategory;
 import com.projectmanager.repository.ProjectCategoryRepository;
+import com.projectmanager.repository.ProjectRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -12,9 +13,11 @@ import java.util.Optional;
 public class ProjectCategoryService {
 
     private final ProjectCategoryRepository repo;
+    private final ProjectRepository projectRepository;
 
-    public ProjectCategoryService(ProjectCategoryRepository repo) {
+    public ProjectCategoryService(ProjectCategoryRepository repo, ProjectRepository projectRepository) {
         this.repo = repo;
+        this.projectRepository = projectRepository;
     }
 
     public List<ProjectCategory> getAll() {
@@ -44,6 +47,16 @@ public class ProjectCategoryService {
     @Transactional
     public boolean delete(String id) {
         if (!repo.existsById(id)) return false;
+
+        // Projesi olan kategori silinmemeli — anlamlı hata ver
+        long projectCount = projectRepository.countByCategoryId(id);
+        if (projectCount > 0) {
+            throw new IllegalArgumentException(
+                "Bu kategoride " + projectCount + " proje bulunuyor. " +
+                "Silmeden önce projeleri farklı bir kategoriye taşıyın.");
+        }
+
+        // workflow_steps ON DELETE CASCADE ile otomatik silinir (V11 migration)
         repo.deleteById(id);
         return true;
     }

@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import debounce from 'lodash/debounce';
 import { useLocation } from 'react-router-dom';
 import { projectApi } from '../../services/api';
 import { useProjects, usePersonnel, useOrganization, useSeniorities, usePotentialSales, useInvalidate } from '../../hooks/useQueries';
@@ -112,11 +113,12 @@ function BackIcon() { return <svg width="14" height="14" fill="none" stroke="cur
 function PlusIcon() { return <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>; }
 
 // ── Percentage input (shows "80" + trailing %) ────────────────────────────────
-function PctInput({ value, onChange, isModified }) {
+function PctInput({ value, onChange, isModified, disabled }) {
   const [local, setLocal] = useState(value == null ? '' : String(value));
   useEffect(() => { setLocal(value == null ? '' : String(value)); }, [value]);
 
   const commit = () => {
+    if (disabled) return;
     const raw = local.trim().replace('%', '');
     if (raw === '') { onChange(null); return; }
     const n = Number(raw);
@@ -124,21 +126,23 @@ function PctInput({ value, onChange, isModified }) {
     onChange(Math.min(100, Math.max(0, n)));
   };
 
-  const textColor = isModified ? '#fbbf24' : local ? 'var(--text-primary)' : 'var(--text-muted)';
+  const textColor = disabled ? 'var(--text-muted)' : isModified ? '#fbbf24' : local ? 'var(--text-primary)' : 'var(--text-muted)';
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <input
         value={local}
-        onChange={e => setLocal(e.target.value)}
+        onChange={e => { if (!disabled) setLocal(e.target.value); }}
         onBlur={commit}
-        onFocus={e => e.target.select()}
-        onKeyDown={e => { if (e.key === 'Enter') { commit(); e.target.blur(); } }}
+        onFocus={e => { if (!disabled) e.target.select(); }}
+        onKeyDown={e => { if (!disabled && e.key === 'Enter') { commit(); e.target.blur(); } }}
+        readOnly={disabled}
         style={{
           width: 28, height: 20, textAlign: 'center', fontSize: 11,
           background: 'transparent', border: 'none', outline: 'none',
           color: textColor,
           fontFamily: 'DM Mono, monospace', padding: 0,
+          cursor: disabled ? 'default' : 'text',
         }}
         placeholder="—"
       />
@@ -270,6 +274,14 @@ function PlanningGrid({ project, allPersonnel, units, onBack, onReload }) {
   const [addingResource, setAddingResource] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
+  const canWrite = project.myCanWrite !== false; // undefined/true → yazma izni var
+
+  // onReload'ı ref'te tut → debounce fonksiyonu her render'da yeniden oluşmasın
+  const onReloadRef = useRef(onReload);
+  onReloadRef.current = onReload;
+  const debouncedReload = useRef(debounce(() => onReloadRef.current?.(), 1500)).current;
+  useEffect(() => () => debouncedReload.cancel(), [debouncedReload]);
+
   const tableContainerRef = useRef(null);
   const currentMonthRef   = useRef(null);
 
@@ -358,6 +370,7 @@ function PlanningGrid({ project, allPersonnel, units, onBack, onReload }) {
   };
 
   const setVal = async (pid, y, m, type, val) => {
+    if (!canWrite) return; // read-only: yazma yetkisi yok
     const key = `${pid}_${y}_${m}`;
     setLocalPlan(prev => ({ ...prev, [key]: { ...prev[key], [type]: val } }));
     // Auto-save this single cell
@@ -378,10 +391,12 @@ function PlanningGrid({ project, allPersonnel, units, onBack, onReload }) {
     }
     try {
       await projectApi.updateResourcePlan(localProject.id, resourcePlan);
+      debouncedReload(); // RQ cache'i gecikmeli güncelle (sayfa geçişlerinde taze veri)
     } catch (e) { console.error('Auto-save failed', e); }
   };
 
   const handleBulkSave = async updates => {
+    if (!canWrite) { setBulkPerson(null); return; }
     const newPlan = { ...localPlan };
     for (const [key, vals] of Object.entries(updates)) {
       newPlan[key] = { ...newPlan[key] };
@@ -391,7 +406,6 @@ function PlanningGrid({ project, allPersonnel, units, onBack, onReload }) {
     }
     setLocalPlan(newPlan);
     setBulkPerson(null);
-    // Auto-save
     const resourcePlan = [];
     for (const [k, vals] of Object.entries(newPlan)) {
       const [p, yr, mo] = k.split('_');
@@ -406,22 +420,23 @@ function PlanningGrid({ project, allPersonnel, units, onBack, onReload }) {
     }
     try {
       await projectApi.updateResourcePlan(localProject.id, resourcePlan);
+      onReload?.(); // toplu kayıtta hemen güncelle
     } catch (e) { console.error('Bulk auto-save failed', e); }
   };
 
 
   const handleAddResource = async personId => {
+    if (!canWrite) { setAddingResource(false); return; }
     const newIds = [...personnelIdSet, String(personId)];
     await projectApi.updatePersonnel(localProject.id, [...newIds]);
     setLocalProject(prev => ({ ...prev, personnelIds: [...newIds] }));
     setAddingResource(false);
+    onReload?.();
   };
 
   const handleDeleteResource = async person => {
     const pid = String(person.id);
-    // Remove from personnelIds
     const newIds = [...personnelIdSet].filter(id => id !== pid);
-    // Remove all plan entries for this person
     const newPlan = { ...localPlan };
     for (const key of Object.keys(newPlan)) {
       if (key.startsWith(`${pid}_`)) delete newPlan[key];
@@ -429,7 +444,6 @@ function PlanningGrid({ project, allPersonnel, units, onBack, onReload }) {
     setLocalPlan(newPlan);
     setLocalProject(prev => ({ ...prev, personnelIds: newIds }));
     setDeleteConfirm(null);
-    // Save to backend
     try {
       await projectApi.updatePersonnel(localProject.id, newIds);
       const resourcePlan = [];
@@ -445,6 +459,7 @@ function PlanningGrid({ project, allPersonnel, units, onBack, onReload }) {
         }
       }
       await projectApi.updateResourcePlan(localProject.id, resourcePlan);
+      onReload?.();
     } catch (e) { console.error('Delete resource failed', e); }
   };
 
@@ -493,25 +508,27 @@ function PlanningGrid({ project, allPersonnel, units, onBack, onReload }) {
         ))}
       </div>
 
-      {/* Add resource bar */}
-      <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-        {addingResource ? (
-          <>
-            <SearchableSelect
-              options={availablePersonnel.map(p => ({ value: p.id, label: `${p.firstName} ${p.lastName}` }))}
-              value=""
-              onChange={handleAddResource}
-              placeholder="Personel seçin..."
-              style={{ minWidth: 240 }}
-            />
-            <button onClick={() => setAddingResource(false)} style={{ padding: '4px 10px', borderRadius: 5, border: '1px solid var(--border)', background: 'var(--bg-hover)', cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)', fontFamily: 'DM Sans, sans-serif' }}>İptal</button>
-          </>
-        ) : (
-          <button onClick={() => setAddingResource(true)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 5, border: '1px dashed var(--border)', background: 'transparent', cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)', fontFamily: 'DM Sans, sans-serif' }}>
-            <PlusIcon /> Kaynak Ekle
-          </button>
-        )}
-      </div>
+      {/* Add resource bar — sadece canWrite varsa göster */}
+      {canWrite && (
+        <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+          {addingResource ? (
+            <>
+              <SearchableSelect
+                options={availablePersonnel.map(p => ({ value: p.id, label: `${p.firstName} ${p.lastName}` }))}
+                value=""
+                onChange={handleAddResource}
+                placeholder="Personel seçin..."
+                style={{ minWidth: 240 }}
+              />
+              <button onClick={() => setAddingResource(false)} style={{ padding: '4px 10px', borderRadius: 5, border: '1px solid var(--border)', background: 'var(--bg-hover)', cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)', fontFamily: 'DM Sans, sans-serif' }}>İptal</button>
+            </>
+          ) : (
+            <button onClick={() => setAddingResource(true)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 5, border: '1px dashed var(--border)', background: 'transparent', cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)', fontFamily: 'DM Sans, sans-serif' }}>
+              <PlusIcon /> Kaynak Ekle
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Table */}
       <div ref={tableContainerRef} style={{ overflowX: 'auto' }}>
@@ -589,14 +606,18 @@ function PlanningGrid({ project, allPersonnel, units, onBack, onReload }) {
                           <span style={{ fontWeight: 500, fontSize: 12, color: grp.nameColor }}>
                             {person.firstName} {person.lastName}
                           </span>
-                          <button onClick={() => setBulkPerson(person)} title="Toplu atama"
-                            style={{ padding: '1px 5px', fontSize: 9, background: 'var(--bg-hover)', border: '1px solid var(--border)', borderRadius: 3, cursor: 'pointer', color: 'var(--text-muted)', fontFamily: 'DM Sans, sans-serif', flexShrink: 0 }}>
-                            Toplu
-                          </button>
-                          <button onClick={() => setDeleteConfirm(person)} title="Kaynağı sil"
-                            style={{ padding: '1px 5px', fontSize: 9, background: 'transparent', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 3, cursor: 'pointer', color: '#f87171', fontFamily: 'DM Sans, sans-serif', flexShrink: 0 }}>
-                            Sil
-                          </button>
+                          {canWrite && (
+                            <button onClick={() => setBulkPerson(person)} title="Toplu atama"
+                              style={{ padding: '1px 5px', fontSize: 9, background: 'var(--bg-hover)', border: '1px solid var(--border)', borderRadius: 3, cursor: 'pointer', color: 'var(--text-muted)', fontFamily: 'DM Sans, sans-serif', flexShrink: 0 }}>
+                              Toplu
+                            </button>
+                          )}
+                          {canWrite && (
+                            <button onClick={() => setDeleteConfirm(person)} title="Kaynağı sil"
+                              style={{ padding: '1px 5px', fontSize: 9, background: 'transparent', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 3, cursor: 'pointer', color: '#f87171', fontFamily: 'DM Sans, sans-serif', flexShrink: 0 }}>
+                              Sil
+                            </button>
+                          )}
                         </div>
                       </td>
                       {months.map(({ month, year }) => {
@@ -611,7 +632,7 @@ function PlanningGrid({ project, allPersonnel, units, onBack, onReload }) {
                                 borderLeft: type === 'need' ? '1px solid var(--border)' : 'none',
                                 background: modified ? 'rgba(251,191,36,0.12)' : v != null ? `${TYPE_COLORS[type]}1a` : isCur ? 'rgba(99,102,241,0.03)' : 'transparent',
                               }}>
-                              <PctInput value={v} onChange={val => setVal(person.id, year, month, type, val)} isModified={modified} />
+                              <PctInput value={v} onChange={val => setVal(person.id, year, month, type, val)} isModified={modified} disabled={!canWrite} />
                             </td>
                           );
                         });

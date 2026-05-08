@@ -1,6 +1,7 @@
 package com.projectmanager.model;
 
 import jakarta.persistence.*;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
@@ -20,6 +21,12 @@ public class Personnel extends Auditable {
 
     private String unitId;
 
+    @Column(name = "start_date", nullable = false)
+    private LocalDate startDate = LocalDate.of(2025, 1, 1);
+
+    @Column(name = "end_date")
+    private LocalDate endDate;
+
     public Personnel() { this.id = UUID.randomUUID().toString(); }
 
     public String getId() { return id; }
@@ -32,4 +39,8 @@ public class Personnel extends Auditable {
     public void setSeniorityId(String seniorityId) { this.seniorityId = seniorityId; }
     public String getUnitId() { return unitId; }
     public void setUnitId(String unitId) { this.unitId = unitId; }
+    public LocalDate getStartDate() { return startDate; }
+    public void setStartDate(LocalDate startDate) { this.startDate = startDate; }
+    public LocalDate getEndDate() { return endDate; }
+    public void setEndDate(LocalDate endDate) { this.endDate = endDate; }
 }

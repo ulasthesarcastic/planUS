@@ -5,11 +5,14 @@ import com.projectmanager.model.PotentialSale;
 import com.projectmanager.repository.PaymentItemRepository;
 import com.projectmanager.repository.PotentialSaleRepository;
 import com.projectmanager.repository.ProjectRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class PotentialSaleService {
@@ -17,21 +20,35 @@ public class PotentialSaleService {
     private final PotentialSaleRepository repo;
     private final ProjectRepository projectRepository;
     private final PaymentItemRepository paymentItemRepository;
+    private final PermissionService permissionService;
 
     public PotentialSaleService(PotentialSaleRepository repo,
                                 ProjectRepository projectRepository,
-                                PaymentItemRepository paymentItemRepository) {
+                                PaymentItemRepository paymentItemRepository,
+                                PermissionService permissionService) {
         this.repo = repo;
         this.projectRepository = projectRepository;
         this.paymentItemRepository = paymentItemRepository;
+        this.permissionService = permissionService;
     }
 
-    public List<PotentialSale> getAll() { return repo.findAll(); }
-    public List<PotentialSale> getByProject(String projectId) { return repo.findByProjectId(projectId); }
+    public List<PotentialSale> getAll() {
+        return repo.findAll().stream()
+                .filter(s -> permissionService.canReadSale(s.getProjectId()))
+                .collect(Collectors.toList());
+    }
+
+    public List<PotentialSale> getByProject(String projectId) {
+        if (!permissionService.canReadSale(projectId))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Bu projenin satışlarını görme yetkiniz yok.");
+        return repo.findByProjectId(projectId);
+    }
     public Optional<PotentialSale> getById(String id) { return repo.findById(id); }
 
     @Transactional
     public PotentialSale create(PotentialSale sale) {
+        if (!permissionService.canWriteSale(sale.getProjectId()))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Satış/sipariş oluşturma yetkiniz yok.");
         validate(sale);
         PotentialSale saved = repo.save(sale);
 
@@ -61,6 +78,8 @@ public class PotentialSaleService {
 
         PotentialSale existing = repo.findById(id).orElse(null);
         if (existing == null) return Optional.empty();
+        if (!permissionService.canEditSale(existing.getProjectId()))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Bu satışı/siparişi düzenleme yetkiniz yok.");
 
         PotentialSale.Status oldStatus = existing.getStatus();
         PotentialSale.Status newStatus = updated.getStatus();
@@ -127,6 +146,8 @@ public class PotentialSaleService {
     public boolean delete(String id) {
         PotentialSale sale = repo.findById(id).orElse(null);
         if (sale == null) return false;
+        if (!permissionService.canDeleteSale(sale.getProjectId()))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Bu satışı/siparişi silme yetkiniz yok.");
 
         // KAZANILDI durumundaki siparişi silmek: ödeme alındıysa blokla, değilse PaymentItem'ı da sil
         if (sale.getStatus() == PotentialSale.Status.KAZANILDI) {
@@ -179,8 +200,10 @@ public class PotentialSaleService {
             throw new IllegalArgumentException("Satış adı zorunludur.");
         // projectId opsiyonel — sadece girilmişse doğrula
         if (s.getProjectId() != null && !s.getProjectId().isBlank()) {
-            projectRepository.findById(s.getProjectId())
+            var project = projectRepository.findById(s.getProjectId())
                 .orElseThrow(() -> new IllegalArgumentException("Geçersiz proje."));
+            if ("POTANSIYEL".equals(project.getProjectStatus()))
+                throw new IllegalArgumentException("Potansiyel projeler sipariş/satış ile ilişkilendirilemez.");
         }
         if (s.getProbability() < 0 || s.getProbability() > 100)
             throw new IllegalArgumentException("Olasılık 0-100 arasında olmalıdır.");

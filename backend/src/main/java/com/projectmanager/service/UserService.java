@@ -1,12 +1,14 @@
 package com.projectmanager.service;
 
 import com.projectmanager.model.User;
+import com.projectmanager.model.UserProjectPermission;
 import com.projectmanager.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -52,5 +54,40 @@ public class UserService {
 
     public boolean checkPassword(String rawPassword, String encodedPassword) {
         return passwordEncoder.matches(rawPassword, encodedPassword);
+    }
+
+    /** Modül + proje yetkilerini günceller */
+    @Transactional
+    @SuppressWarnings("unchecked")
+    public Optional<User> updatePermissions(String id, Map<String, Object> body,
+                                            PermissionService permissionService) {
+        return userRepository.findById(id).map(user -> {
+            // Modül yetkileri
+            if (body.containsKey("portfolioFull"))
+                user.setPortfolioFull(Boolean.TRUE.equals(body.get("portfolioFull")));
+            if (body.containsKey("busdevFull"))
+                user.setBusdevFull(Boolean.TRUE.equals(body.get("busdevFull")));
+            if (body.containsKey("pnlAccess"))
+                user.setPnlAccess(Boolean.TRUE.equals(body.get("pnlAccess")));
+            userRepository.save(user);
+
+            // Proje bazlı yetkiler
+            if (body.containsKey("projectPermissions")) {
+                List<Map<String, Object>> rawList =
+                    (List<Map<String, Object>>) body.get("projectPermissions");
+                List<UserProjectPermission> perms = rawList.stream().map(m -> {
+                    UserProjectPermission p = new UserProjectPermission();
+                    p.setUserId(id);
+                    p.setProjectId((String) m.get("projectId"));
+                    p.setCanRead(Boolean.TRUE.equals(m.get("canRead")));
+                    p.setCanWrite(Boolean.TRUE.equals(m.get("canWrite")));
+                    p.setCanEdit(Boolean.TRUE.equals(m.get("canEdit")));
+                    p.setCanDelete(Boolean.TRUE.equals(m.get("canDelete")));
+                    return p;
+                }).toList();
+                permissionService.saveProjectPermissions(id, perms);
+            }
+            return user;
+        });
     }
 }

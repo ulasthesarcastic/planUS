@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tansta
 import {
   projectApi, projectCategoryApi, projectTypeApi,
   personnelApi, seniorityApi, organizationApi,
-  productApi, potentialSaleApi, costTypeApi, projectCostApi,
+  productApi, potentialSaleApi, costTypeApi, projectCostApi, procurementApi,
 } from '../services/api';
 
 // ── Query Keys ────────────────────────────────────────────────────────────────
@@ -23,6 +23,10 @@ export const QK = {
   projectCosts:   (projectId) => ['projectCosts', projectId],
   allProjectCosts: ['allProjectCosts'],
   siparisler:     ['siparisler'],
+  seniorityHistory: (id) => ['seniorityHistory', id],
+  allSeniorityHistory: ['allSeniorityHistory'],
+  procurements:    (projectId) => ['procurements', projectId],
+  allProcurements: ['allProcurements'],
 };
 
 // ── Ortak ayarlar ─────────────────────────────────────────────────────────────
@@ -183,6 +187,42 @@ export function useAllProjectCosts() {
   });
 }
 
+export function usePersonnelSeniorityHistory(personnelId) {
+  return useQuery({
+    queryKey: QK.seniorityHistory(personnelId),
+    queryFn: () => personnelApi.getSeniorityHistory(personnelId).then(r => r.data),
+    enabled: !!personnelId,
+    ...DYNAMIC_OPTIONS,
+  });
+}
+
+export function useAllSeniorityHistory() {
+  return useQuery({
+    queryKey: QK.allSeniorityHistory,
+    queryFn: () => personnelApi.getAllSeniorityHistory().then(r => r.data),
+    ...DYNAMIC_OPTIONS,
+  });
+}
+
+export function useProcurements(projectId) {
+  return useQuery({
+    queryKey: QK.procurements(projectId),
+    queryFn: () => procurementApi.getByProject(projectId).then(r => r.data),
+    enabled: !!projectId,
+    retry: 0,
+    ...DYNAMIC_OPTIONS,
+  });
+}
+
+export function useAllProcurements() {
+  return useQuery({
+    queryKey: QK.allProcurements,
+    queryFn: () => procurementApi.getAll().then(r => r.data),
+    retry: 0,
+    ...DYNAMIC_OPTIONS,
+  });
+}
+
 // ── Invalidation helper ───────────────────────────────────────────────────────
 // Bir kayıt değişince ilgili cache'leri geçersiz kılar
 export function useInvalidate() {
@@ -198,8 +238,17 @@ export function useInvalidate() {
       qc.invalidateQueries({ queryKey: QK.potentialSales });
       qc.invalidateQueries({ queryKey: QK.siparisler });
     },
-    costTypes:    () => qc.invalidateQueries({ queryKey: QK.costTypes }),
-    projectCosts: (id) => qc.invalidateQueries({ queryKey: QK.projectCosts(id) }),
+    costTypes:       () => qc.invalidateQueries({ queryKey: QK.costTypes }),
+    projectCosts:    (id) => qc.invalidateQueries({ queryKey: QK.projectCosts(id) }),
+    allProjectCosts: () => qc.invalidateQueries({ queryKey: QK.allProjectCosts }),
+    seniorityHistory: (id) => {
+      qc.invalidateQueries({ queryKey: QK.seniorityHistory(id) });
+      qc.invalidateQueries({ queryKey: QK.allSeniorityHistory });
+    },
+    procurements: (id) => {
+      qc.invalidateQueries({ queryKey: QK.procurements(id) });
+      qc.invalidateQueries({ queryKey: QK.allProcurements });
+    },
     all:          () => qc.invalidateQueries(),
   };
 }
