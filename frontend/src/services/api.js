@@ -57,6 +57,12 @@ export const personnelApi = {
   create: (data) => API.post('/personnel', data),
   update: (id, data) => API.put(`/personnel/${id}`, data),
   delete: (id) => API.delete(`/personnel/${id}`),
+  countFuturePlans: (id, year, month) => API.get(`/personnel/${id}/future-plans/count`, { params: { year, month } }),
+  getFuturePlanDetails: (id, year, month) => API.get(`/personnel/${id}/future-plans/details`, { params: { year, month } }),
+  deleteFuturePlans: (id, year, month) => API.delete(`/personnel/${id}/future-plans`, { params: { year, month } }),
+  getSeniorityHistory: (id) => API.get(`/personnel/${id}/seniority-history`),
+  saveSeniorityHistory: (id, entries) => API.put(`/personnel/${id}/seniority-history`, entries),
+  getAllSeniorityHistory: () => API.get('/personnel/seniority-history'),
 };
 
 export const projectApi = {
@@ -141,4 +147,18 @@ export const projectCategoryApi = {
   delete: (id) => API.delete(`/project-categories/${id}`),
   getWorkflow: (categoryId) => API.get(`/project-categories/${categoryId}/workflow`),
   saveWorkflow: (categoryId, steps) => API.put(`/project-categories/${categoryId}/workflow`, steps),
+};
+
+
+export const generalExpenseApi = {
+  getAll: () => API.get('/general-expenses'),
+  create: (data) => API.post('/general-expenses', data),
+  update: (id, data) => API.put(`/general-expenses/${id}`, data),
+  delete: (id) => API.delete(`/general-expenses/${id}`),
+};
+
+export const procurementApi = {
+  getAll:        ()                 => API.get('/procurements'),
+  getByProject:  (projectId)       => API.get(`/projects/${projectId}/procurements`),
+  saveAll:       (projectId, items) => API.put(`/projects/${projectId}/procurements`, items),
 };

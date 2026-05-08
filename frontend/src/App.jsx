@@ -18,6 +18,7 @@ import PnLPage from './components/PnL/PnLPage';
 import ProjectTypesPage from './components/ProjectTypes/ProjectTypesPage';
 import ProjectCategoriesPage from './components/ProjectCategories/ProjectCategoriesPage';
 import CostTypesPage from './components/CostTypes/CostTypesPage';
+import GeneralExpensesPage from './components/GeneralExpenses/GeneralExpensesPage';
 import { toSlug } from './components/Sidebar';
 import { projectCategoryApi } from './services/api';
 import DashboardPage from './components/Dashboard/DashboardPage';
@@ -247,6 +248,7 @@ function AppContent() {
             <Route path="/siparisler" element={<SiparislerPage />} />
             <Route path="/budget" element={<BudgetPage />} />
             <Route path="/cost-types" element={<CostTypesPage />} />
+            <Route path="/general-expenses" element={<GeneralExpensesPage />} />
             <Route path="/users" element={<UsersPage />} />
           </Routes>
         </main>

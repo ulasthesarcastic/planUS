@@ -37,6 +37,12 @@ public class Project extends Auditable {
 
     private int probability = 50; // potansiyel projeler için olasılık (0-100)
 
+    @Column(name = "pnl_exclude_revenue", nullable = false, columnDefinition = "boolean default false")
+    private boolean pnlExcludeRevenue = false;
+
+    @Column(name = "pnl_exclude_expense", nullable = false, columnDefinition = "boolean default false")
+    private boolean pnlExcludeExpense = false;
+
     // Mevcut kullanıcının bu proje üzerindeki yetkileri (response'a eklenir, DB'ye yazılmaz)
     @Transient private boolean myCanRead   = true;
     @Transient private boolean myCanWrite  = true;
@@ -108,6 +114,10 @@ public class Project extends Auditable {
     public void setProjectStatus(String projectStatus) { this.projectStatus = projectStatus; }
     public int getProbability() { return probability; }
     public void setProbability(int probability) { this.probability = probability; }
+    public boolean isPnlExcludeRevenue() { return pnlExcludeRevenue; }
+    public void setPnlExcludeRevenue(boolean pnlExcludeRevenue) { this.pnlExcludeRevenue = pnlExcludeRevenue; }
+    public boolean isPnlExcludeExpense() { return pnlExcludeExpense; }
+    public void setPnlExcludeExpense(boolean pnlExcludeExpense) { this.pnlExcludeExpense = pnlExcludeExpense; }
     public boolean isMyCanRead()   { return myCanRead; }
     public boolean isMyCanWrite()  { return myCanWrite; }
     public boolean isMyCanEdit()   { return myCanEdit; }

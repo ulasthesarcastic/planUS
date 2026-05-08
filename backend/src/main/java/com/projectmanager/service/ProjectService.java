@@ -146,6 +146,8 @@ public class ProjectService {
             existing.setUnitId(updated.getUnitId());
             if (updated.getProjectStatus() != null) existing.setProjectStatus(updated.getProjectStatus());
             existing.setProbability(updated.getProbability());
+            existing.setPnlExcludeRevenue(updated.isPnlExcludeRevenue());
+            existing.setPnlExcludeExpense(updated.isPnlExcludeExpense());
             return projectRepository.save(existing);
         });
     }
