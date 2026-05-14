@@ -12,8 +12,12 @@ import java.util.UUID;
 public class ProjectCostService {
 
     private final ProjectCostRepository repo;
+    private final ActivityLogService activityLogService;
 
-    public ProjectCostService(ProjectCostRepository repo) { this.repo = repo; }
+    public ProjectCostService(ProjectCostRepository repo, ActivityLogService activityLogService) {
+        this.repo = repo;
+        this.activityLogService = activityLogService;
+    }
 
     public List<ProjectCost> getAll() {
         return repo.findAll();
@@ -30,6 +34,11 @@ public class ProjectCostService {
             c.setId(UUID.randomUUID().toString());
             c.setProjectId(projectId);
         });
-        return repo.saveAll(costs);
+        List<ProjectCost> saved = repo.saveAll(costs);
+        try {
+            activityLogService.log("MALIYET", projectId, projectId, "UPDATE",
+                    saved.size() + " maliyet kalemi kaydedildi");
+        } catch (Exception ignored) {}
+        return saved;
     }
 }

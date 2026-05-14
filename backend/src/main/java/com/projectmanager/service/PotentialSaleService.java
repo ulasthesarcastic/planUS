@@ -21,15 +21,18 @@ public class PotentialSaleService {
     private final ProjectRepository projectRepository;
     private final PaymentItemRepository paymentItemRepository;
     private final PermissionService permissionService;
+    private final ActivityLogService activityLogService;
 
     public PotentialSaleService(PotentialSaleRepository repo,
                                 ProjectRepository projectRepository,
                                 PaymentItemRepository paymentItemRepository,
-                                PermissionService permissionService) {
+                                PermissionService permissionService,
+                                ActivityLogService activityLogService) {
         this.repo = repo;
         this.projectRepository = projectRepository;
         this.paymentItemRepository = paymentItemRepository;
         this.permissionService = permissionService;
+        this.activityLogService = activityLogService;
     }
 
     public List<PotentialSale> getAll() {
@@ -51,6 +54,13 @@ public class PotentialSaleService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Satış/sipariş oluşturma yetkiniz yok.");
         validate(sale);
         PotentialSale saved = repo.save(sale);
+
+        try {
+            String entityType = resolveEntityType(saved.getSaleType());
+            activityLogService.log(entityType, saved.getId(), saved.getName(), "CREATE",
+                    "Tutar: " + saved.getAmount() + " " + saved.getCurrency()
+                    + ", Durum: " + saved.getStatus());
+        } catch (Exception ignored) {}
 
         // Direkt KAZANILDI olarak kaydedildiyse PaymentItem oluştur
         if (saved.getStatus() == PotentialSale.Status.KAZANILDI
@@ -115,6 +125,17 @@ public class PotentialSaleService {
 
         PotentialSale saved = repo.save(existing);
 
+        try {
+            String entityType = resolveEntityType(saved.getSaleType());
+            if (!oldStatus.equals(newStatus)) {
+                activityLogService.log(entityType, saved.getId(), saved.getName(), "STATUS_CHANGE",
+                        oldStatus + " → " + newStatus);
+            } else {
+                activityLogService.log(entityType, saved.getId(), saved.getName(), "UPDATE",
+                        "Tutar: " + saved.getAmount() + " " + saved.getCurrency());
+            }
+        } catch (Exception ignored) {}
+
         // KAZANILDI durumunda PaymentItem oluştur ya da güncelle
         if (newStatus == PotentialSale.Status.KAZANILDI) {
             if (saved.getProjectId() != null && !saved.getProjectId().isBlank()) {
@@ -160,7 +181,12 @@ public class PotentialSaleService {
             });
         }
 
+        String saleName = sale.getName();
+        String entityType = resolveEntityType(sale.getSaleType());
         repo.deleteById(id);
+        try {
+            activityLogService.log(entityType, id, saleName, "DELETE", null);
+        } catch (Exception ignored) {}
         return true;
     }
 
@@ -193,6 +219,11 @@ public class PotentialSaleService {
             count++;
         }
         return count;
+    }
+
+    private String resolveEntityType(PotentialSale.SaleType saleType) {
+        if (saleType == PotentialSale.SaleType.SIPARIS) return "POTANSIYEL_SIPARIS";
+        return "POTANSIYEL_PROJE";
     }
 
     private void validate(PotentialSale s) {

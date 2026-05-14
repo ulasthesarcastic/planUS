@@ -29,19 +29,22 @@ public class ProjectService {
     private final PaymentItemRepository paymentItemRepository;
     private final PotentialSaleRepository potentialSaleRepository;
     private final PermissionService permissionService;
+    private final ActivityLogService activityLogService;
 
     public ProjectService(ProjectRepository projectRepository,
                           PersonnelRepository personnelRepository,
                           ResourceEntryRepository resourceEntryRepository,
                           PaymentItemRepository paymentItemRepository,
                           PotentialSaleRepository potentialSaleRepository,
-                          PermissionService permissionService) {
+                          PermissionService permissionService,
+                          ActivityLogService activityLogService) {
         this.projectRepository    = projectRepository;
         this.personnelRepository   = personnelRepository;
         this.resourceEntryRepository = resourceEntryRepository;
         this.paymentItemRepository = paymentItemRepository;
         this.potentialSaleRepository = potentialSaleRepository;
         this.permissionService     = permissionService;
+        this.activityLogService    = activityLogService;
     }
 
     // ── Listeleme ────────────────────────────────────────────────────────────
@@ -112,7 +115,12 @@ public class ProjectService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Proje oluşturma yetkiniz yok.");
         validate(project);
         project.setId(UUID.randomUUID().toString());
-        return projectRepository.save(project);
+        Project saved = projectRepository.save(project);
+        try {
+            activityLogService.log("PROJE", saved.getId(), saved.getName(), "CREATE",
+                    "Bütçe: " + saved.getBudget() + " " + saved.getBudgetCurrency());
+        } catch (Exception ignored) {}
+        return saved;
     }
 
     @Transactional
@@ -129,6 +137,8 @@ public class ProjectService {
             // Genel düzenleme yetkisi
             if (!permissionService.canEdit(id, existing.getProjectStatus()))
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Bu projeyi düzenleme yetkiniz yok.");
+
+            String oldStatus = existing.getProjectStatus();
 
             existing.setName(updated.getName());
             existing.setCustomerName(updated.getCustomerName());
@@ -148,7 +158,20 @@ public class ProjectService {
             existing.setProbability(updated.getProbability());
             existing.setPnlExcludeRevenue(updated.isPnlExcludeRevenue());
             existing.setPnlExcludeExpense(updated.isPnlExcludeExpense());
-            return projectRepository.save(existing);
+            Project saved = projectRepository.save(existing);
+
+            try {
+                String newStatus = saved.getProjectStatus();
+                if (oldStatus != null && !oldStatus.equals(newStatus)) {
+                    activityLogService.log("PROJE", saved.getId(), saved.getName(), "STATUS_CHANGE",
+                            oldStatus + " → " + newStatus);
+                } else {
+                    activityLogService.log("PROJE", saved.getId(), saved.getName(), "UPDATE",
+                            "Ad: " + saved.getName() + ", Bütçe: " + saved.getBudget() + " " + saved.getBudgetCurrency());
+                }
+            } catch (Exception ignored) {}
+
+            return saved;
         });
     }
 
@@ -202,7 +225,13 @@ public class ProjectService {
                 }
             }
             p.setPaymentPlan(paymentPlan);
-            return projectRepository.save(p);
+            Project saved = projectRepository.save(p);
+            try {
+                int count = paymentPlan != null ? paymentPlan.size() : 0;
+                activityLogService.log("ODEME_KALEMI", id, saved.getName(), "UPDATE",
+                        count + " ödeme kalemi kaydedildi");
+            } catch (Exception ignored) {}
+            return saved;
         });
     }
 
@@ -232,8 +261,12 @@ public class ProjectService {
         Project p = projectRepository.findById(id).orElse(null);
         if (p != null && !permissionService.canDelete(id, p.getProjectStatus()))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Bu projeyi silme yetkiniz yok.");
+        String projectName = p != null ? p.getName() : id;
         resourceEntryRepository.deleteByProjectId(id);
         projectRepository.deleteById(id);
+        try {
+            activityLogService.log("PROJE", id, projectName, "DELETE", null);
+        } catch (Exception ignored) {}
         return true;
     }
 

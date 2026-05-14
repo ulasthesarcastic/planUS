@@ -26,15 +26,18 @@ public class PersonnelService {
     private final SeniorityRepository seniorityRepository;
     private final ResourceEntryRepository resourceEntryRepository;
     private final PersonnelSeniorityHistoryRepository seniorityHistoryRepository;
+    private final ActivityLogService activityLogService;
 
     public PersonnelService(PersonnelRepository personnelRepository,
                             SeniorityRepository seniorityRepository,
                             ResourceEntryRepository resourceEntryRepository,
-                            PersonnelSeniorityHistoryRepository seniorityHistoryRepository) {
+                            PersonnelSeniorityHistoryRepository seniorityHistoryRepository,
+                            ActivityLogService activityLogService) {
         this.personnelRepository = personnelRepository;
         this.seniorityRepository = seniorityRepository;
         this.resourceEntryRepository = resourceEntryRepository;
         this.seniorityHistoryRepository = seniorityHistoryRepository;
+        this.activityLogService = activityLogService;
     }
 
     public List<Personnel> getAll() { return personnelRepository.findAll(); }
@@ -52,7 +55,12 @@ public class PersonnelService {
     public Personnel create(Personnel personnel) {
         validateSeniority(personnel.getSeniorityId());
         personnel.setId(UUID.randomUUID().toString());
-        return personnelRepository.save(personnel);
+        Personnel saved = personnelRepository.save(personnel);
+        try {
+            activityLogService.log("PERSONEL", saved.getId(),
+                    saved.getFirstName() + " " + saved.getLastName(), "CREATE", null);
+        } catch (Exception ignored) {}
+        return saved;
     }
 
     @Transactional
@@ -65,14 +73,24 @@ public class PersonnelService {
             existing.setUnitId(updated.getUnitId());
             if (updated.getStartDate() != null) existing.setStartDate(updated.getStartDate());
             existing.setEndDate(updated.getEndDate());
-            return personnelRepository.save(existing);
+            Personnel saved = personnelRepository.save(existing);
+            try {
+                activityLogService.log("PERSONEL", saved.getId(),
+                        saved.getFirstName() + " " + saved.getLastName(), "UPDATE", null);
+            } catch (Exception ignored) {}
+            return saved;
         });
     }
 
     @Transactional
     public boolean delete(String id) {
         if (!personnelRepository.existsById(id)) return false;
+        String name = personnelRepository.findById(id)
+                .map(p -> p.getFirstName() + " " + p.getLastName()).orElse(id);
         personnelRepository.deleteById(id);
+        try {
+            activityLogService.log("PERSONEL", id, name, "DELETE", null);
+        } catch (Exception ignored) {}
         return true;
     }
 

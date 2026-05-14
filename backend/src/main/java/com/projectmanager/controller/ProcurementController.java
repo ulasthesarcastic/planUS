@@ -3,6 +3,7 @@ package com.projectmanager.controller;
 import com.projectmanager.model.Procurement;
 import com.projectmanager.repository.ProcurementRepository;
 import com.projectmanager.repository.ProjectRepository;
+import com.projectmanager.service.ActivityLogService;
 import com.projectmanager.service.PermissionService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,13 +19,16 @@ public class ProcurementController {
     private final ProcurementRepository repo;
     private final ProjectRepository projectRepository;
     private final PermissionService permissionService;
+    private final ActivityLogService activityLogService;
 
     public ProcurementController(ProcurementRepository repo,
                                  ProjectRepository projectRepository,
-                                 PermissionService permissionService) {
+                                 PermissionService permissionService,
+                                 ActivityLogService activityLogService) {
         this.repo = repo;
         this.projectRepository = projectRepository;
         this.permissionService = permissionService;
+        this.activityLogService = activityLogService;
     }
 
     /** Tüm projeler için satın alma kayıtları (P&L sayfası için) */
@@ -55,6 +59,13 @@ public class ProcurementController {
             p.setId(null);
             p.setProjectId(projectId);
         }
-        return ResponseEntity.ok(repo.saveAll(items));
+        List<Procurement> saved = repo.saveAll(items);
+        try {
+            String projectName = projectRepository.findById(projectId)
+                    .map(p -> p.getName()).orElse(projectId);
+            activityLogService.log("SATINALMA", projectId, projectName, "UPDATE",
+                    saved.size() + " satın alma kalemi kaydedildi");
+        } catch (Exception ignored) {}
+        return ResponseEntity.ok(saved);
     }
 }

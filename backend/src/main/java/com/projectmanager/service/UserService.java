@@ -15,10 +15,13 @@ import java.util.Optional;
 public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final ActivityLogService activityLogService;
 
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder,
+                       ActivityLogService activityLogService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.activityLogService = activityLogService;
     }
 
     public List<User> getAll() { return userRepository.findAll(); }
@@ -30,7 +33,12 @@ public class UserService {
         if (userRepository.existsByUsername(user.getUsername()))
             throw new IllegalArgumentException("Bu kullanıcı adı zaten alınmış.");
         user.setPassword(passwordEncoder.encode(user.getPassword()));
-        return userRepository.save(user);
+        User saved = userRepository.save(user);
+        try {
+            activityLogService.log("KULLANICI", saved.getId(), saved.getUsername(), "CREATE",
+                    "Rol: " + saved.getRole());
+        } catch (Exception ignored) {}
+        return saved;
     }
 
     @Transactional
@@ -41,14 +49,24 @@ public class UserService {
             existing.setActive(updated.isActive());
             if (updated.getPassword() != null && !updated.getPassword().isBlank())
                 existing.setPassword(passwordEncoder.encode(updated.getPassword()));
-            return userRepository.save(existing);
+            User saved = userRepository.save(existing);
+            try {
+                activityLogService.log("KULLANICI", saved.getId(), saved.getUsername(), "UPDATE",
+                        "Ad: " + saved.getFullName() + ", Rol: " + saved.getRole()
+                        + ", Aktif: " + saved.isActive());
+            } catch (Exception ignored) {}
+            return saved;
         });
     }
 
     @Transactional
     public boolean delete(String id) {
         if (!userRepository.existsById(id)) return false;
+        String username = userRepository.findById(id).map(User::getUsername).orElse(id);
         userRepository.deleteById(id);
+        try {
+            activityLogService.log("KULLANICI", id, username, "DELETE", null);
+        } catch (Exception ignored) {}
         return true;
     }
 
