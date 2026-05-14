@@ -121,9 +121,10 @@ function calcProjectPnL(project, personnelMap, seniorityMap, linkedSiparisler = 
     if (d.gider > 0) d.giderBreakdown.push({ id: project.id, name: project.name, amount: d.gider });
 
     // Sözleşmeli Planlanan Gelir — pnlExcludeRevenue ile devre dışı bırakılabilir
+    // completed=true olan ödemeler gerçekleşen'de sayıldığından planlanan'a dahil edilmez
     if (!project.pnlExcludeRevenue) {
       for (const item of (project.paymentPlan || [])) {
-        if (item.plannedYear === year && item.plannedMonth === month)
+        if (item.plannedYear === year && item.plannedMonth === month && !item.completed)
           d.sozlesmeli += item.amount || 0;
       }
       if (d.sozlesmeli > 0) d.sozlesmeliBreakdown.push({ id: project.id, name: project.name, amount: d.sozlesmeli });

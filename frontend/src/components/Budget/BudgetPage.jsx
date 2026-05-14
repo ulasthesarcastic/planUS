@@ -48,7 +48,8 @@ function calcProjectMonthlyCosts(project, personnelMap, seniorityMap) {
 function calcProjectMonthlyRevenue(project) {
   const planned = {}, actual = {};
   for (const item of (project.paymentPlan || [])) {
-    if (item.plannedMonth && item.plannedYear) {
+    // completed=true olan ödemeler gerçekleşen'de sayıldığından planlanan'a dahil edilmez
+    if (item.plannedMonth && item.plannedYear && !item.completed) {
       const key = `${item.plannedYear}_${item.plannedMonth}`;
       planned[key] = (planned[key] || 0) + (item.amount || 0);
     }
