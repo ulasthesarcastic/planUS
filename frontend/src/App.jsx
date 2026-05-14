@@ -23,6 +23,7 @@ import { toSlug } from './components/Sidebar';
 import { projectCategoryApi } from './services/api';
 import DashboardPage from './components/Dashboard/DashboardPage';
 import UsersPage from './components/Users/UsersPage';
+import ActivityLogPage from './components/ActivityLog/ActivityLogPage';
 import { ToastProvider } from './components/Toast/Toaster';
 import './styles/global.css';
 
@@ -250,6 +251,7 @@ function AppContent() {
             <Route path="/cost-types" element={<CostTypesPage />} />
             <Route path="/general-expenses" element={<GeneralExpensesPage />} />
             <Route path="/users" element={<UsersPage />} />
+            <Route path="/activity-log" element={<ActivityLogPage />} />
           </Routes>
         </main>
       </div>

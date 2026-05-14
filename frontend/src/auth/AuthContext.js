@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
+import { activityLogApi } from '../services/api';
+import { toastService } from '../services/toastService';
 
 const AuthContext = createContext(null);
 
@@ -26,6 +28,18 @@ export function AuthProvider({ children }) {
     localStorage.setItem('token', token);
     axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     setUser(user);
+
+    // Login sonrası geçmiş kalan potansiyelleri kaydır
+    try {
+      const shiftRes = await activityLogApi.shiftOverdue();
+      const { shiftedProjects = [], shiftedSales = [] } = shiftRes.data;
+      const total = shiftedProjects.length + shiftedSales.length;
+      if (total > 0) {
+        const names = [...shiftedProjects, ...shiftedSales].map(s => s.name).join(', ');
+        toastService.warning(`${total} potansiyel ileriye kaydırıldı: ${names}`);
+      }
+    } catch (_) { /* sessizce geç */ }
+
     return user;
   };
 

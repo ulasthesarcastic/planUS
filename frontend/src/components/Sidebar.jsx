@@ -44,6 +44,7 @@ const Icons = {
     </svg>
   ),
   Grid:     () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>,
+  Clock:    () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
 };
 
 const CAT_ICONS = {
@@ -137,6 +138,9 @@ export default function Sidebar() {
                 {!collapsed && <div className="sidebar-section-label" style={{ marginTop: 8 }}>Sistem</div>}
                 <NavLink to="/users" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Kullanıcı Yönetimi">
                   <Icons.Users />{!collapsed && <span className="nav-item-label">Kullanıcılar</span>}
+                </NavLink>
+                <NavLink to="/activity-log" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Aktivite Geçmişi">
+                  <Icons.Clock />{!collapsed && <span className="nav-item-label">Aktivite Geçmişi</span>}
                 </NavLink>
               </>
             )}

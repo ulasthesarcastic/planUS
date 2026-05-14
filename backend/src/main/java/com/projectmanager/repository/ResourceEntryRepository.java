@@ -8,6 +8,9 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 
 public interface ResourceEntryRepository extends JpaRepository<ResourceEntry, Long> {
+    @Query("SELECT r FROM ResourceEntry r WHERE r.project.id = :projectId")
+    List<ResourceEntry> findByProjectId(@Param("projectId") String projectId);
+
     @Modifying
     @Query("DELETE FROM ResourceEntry r WHERE r.project.id = :projectId")
     void deleteByProjectId(String projectId);

@@ -162,3 +162,9 @@ export const procurementApi = {
   getByProject:  (projectId)       => API.get(`/projects/${projectId}/procurements`),
   saveAll:       (projectId, items) => API.put(`/projects/${projectId}/procurements`, items),
 };
+
+export const activityLogApi = {
+  getAll:       (page = 0, size = 100, entityType) =>
+    API.get('/activity-log', { params: { page, size, ...(entityType ? { entityType } : {}) } }),
+  shiftOverdue: () => API.post('/activity-log/shift-overdue'),
+};
