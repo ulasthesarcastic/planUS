@@ -138,6 +138,20 @@ public class ProjectService {
             if (!permissionService.canEdit(id, existing.getProjectStatus()))
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Bu projeyi düzenleme yetkiniz yok.");
 
+            // Değişen alanları kaydet (update öncesi)
+            java.util.List<String> changes = new java.util.ArrayList<>();
+            if (!java.util.Objects.equals(existing.getName(), updated.getName()))
+                changes.add("Ad: \"" + existing.getName() + "\" → \"" + updated.getName() + "\"");
+            if (!java.util.Objects.equals(existing.getCustomerName(), updated.getCustomerName()))
+                changes.add("Müşteri: \"" + existing.getCustomerName() + "\" → \"" + updated.getCustomerName() + "\"");
+            if (existing.getBudget() != updated.getBudget())
+                changes.add("Bütçe: " + (long)existing.getBudget() + " → " + (long)updated.getBudget() + " " + updated.getBudgetCurrency());
+            if (existing.getStartMonth() != updated.getStartMonth() || existing.getStartYear() != updated.getStartYear())
+                changes.add("Başlangıç: " + existing.getStartMonth() + "/" + existing.getStartYear() + " → " + updated.getStartMonth() + "/" + updated.getStartYear());
+            if (existing.getEndMonth() != updated.getEndMonth() || existing.getEndYear() != updated.getEndYear())
+                changes.add("Bitiş: " + existing.getEndMonth() + "/" + existing.getEndYear() + " → " + updated.getEndMonth() + "/" + updated.getEndYear());
+            if (existing.getProbability() != updated.getProbability())
+                changes.add("Olasılık: %" + (int)existing.getProbability() + " → %" + (int)updated.getProbability());
             String oldStatus = existing.getProjectStatus();
 
             existing.setName(updated.getName());
@@ -166,8 +180,8 @@ public class ProjectService {
                     activityLogService.log("PROJE", saved.getId(), saved.getName(), "STATUS_CHANGE",
                             oldStatus + " → " + newStatus);
                 } else {
-                    activityLogService.log("PROJE", saved.getId(), saved.getName(), "UPDATE",
-                            "Ad: " + saved.getName() + ", Bütçe: " + saved.getBudget() + " " + saved.getBudgetCurrency());
+                    String detail = changes.isEmpty() ? null : String.join(", ", changes);
+                    activityLogService.log("PROJE", saved.getId(), saved.getName(), "UPDATE", detail);
                 }
             } catch (Exception ignored) {}
 

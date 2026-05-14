@@ -94,6 +94,17 @@ public class PotentialSaleService {
         PotentialSale.Status oldStatus = existing.getStatus();
         PotentialSale.Status newStatus = updated.getStatus();
 
+        // Değişen alanları kaydet
+        java.util.List<String> changes = new java.util.ArrayList<>();
+        if (!java.util.Objects.equals(existing.getName(), updated.getName()))
+            changes.add("Ad: \"" + existing.getName() + "\" → \"" + updated.getName() + "\"");
+        if (existing.getAmount() != updated.getAmount())
+            changes.add("Tutar: " + (long)existing.getAmount() + " → " + (long)updated.getAmount() + " " + updated.getCurrency());
+        if (existing.getProbability() != updated.getProbability() && oldStatus == newStatus)
+            changes.add("Olasılık: %" + (int)existing.getProbability() + " → %" + (int)updated.getProbability());
+        if (existing.getTargetMonth() != updated.getTargetMonth() || existing.getTargetYear() != updated.getTargetYear())
+            changes.add("Hedef: " + existing.getTargetMonth() + "/" + existing.getTargetYear() + " → " + updated.getTargetMonth() + "/" + updated.getTargetYear());
+
         // KAZANILDI'dan çıkıyorsak ve ödeme alındıysa → işlemi blokla
         if (oldStatus == PotentialSale.Status.KAZANILDI && newStatus != PotentialSale.Status.KAZANILDI) {
             paymentItemRepository.findFirstBySourceOrderId(id).ifPresent(item -> {
@@ -131,8 +142,8 @@ public class PotentialSaleService {
                 activityLogService.log(entityType, saved.getId(), saved.getName(), "STATUS_CHANGE",
                         oldStatus + " → " + newStatus);
             } else {
-                activityLogService.log(entityType, saved.getId(), saved.getName(), "UPDATE",
-                        "Tutar: " + saved.getAmount() + " " + saved.getCurrency());
+                String detail = changes.isEmpty() ? null : String.join(", ", changes);
+                activityLogService.log(entityType, saved.getId(), saved.getName(), "UPDATE", detail);
             }
         } catch (Exception ignored) {}
 
