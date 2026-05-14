@@ -150,7 +150,10 @@ function calcProjectPnL(project, personnelMap, seniorityMap, linkedSiparisler = 
       if (item.actualYear === year && item.actualMonth === month) {
         const amt = item.actualAmount || item.amount || 0;
         d.gerceklesenGelir += amt;
-        d.gerceklesenGelirBreakdown.push({ id: project.id, name: project.name, amount: amt });
+        // Aynı proje birden fazla ödeme kalemi içerebilir → miktarları birleştir
+        const existing = d.gerceklesenGelirBreakdown.find(b => b.id === project.id);
+        if (existing) existing.amount += amt;
+        else d.gerceklesenGelirBreakdown.push({ id: project.id, name: project.name, amount: amt });
       }
     }
 
