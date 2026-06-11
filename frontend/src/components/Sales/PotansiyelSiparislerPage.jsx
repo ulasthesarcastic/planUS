@@ -374,6 +374,7 @@ export default function PotansiyelSiparislerPage() {
       await potentialSaleApi.delete(s.id);
       setDeleteConfirm(null);
       invalidate.potentialSales();
+      invalidate.projects();
     } catch (e) {
       alert(e.response?.data?.error || 'Silinemedi.');
       setDeleteConfirm(null);
@@ -462,7 +463,7 @@ export default function PotansiyelSiparislerPage() {
           sale={editing?.id ? editing : null}
           projects={projects}
           categories={categories}
-          onSave={() => { setEditing(null); invalidate.potentialSales(); }}
+          onSave={() => { setEditing(null); invalidate.potentialSales(); invalidate.projects(); }}
           onClose={() => setEditing(null)}
         />
       )}

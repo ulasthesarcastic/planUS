@@ -111,6 +111,7 @@ export default function SiparislerPage() {
       await potentialSaleApi.update(s.id, { ...s, status: 'AKTIF', probability: 50 });
       setMoveConfirm(null);
       invalidate.potentialSales();
+      invalidate.projects();
     } catch (e) {
       setActionError(e.response?.data?.error || 'İşlem başarısız.');
     } finally { setSaving(false); }
@@ -124,6 +125,7 @@ export default function SiparislerPage() {
       await potentialSaleApi.delete(s.id);
       setDeleteConfirm(null);
       invalidate.potentialSales();
+      invalidate.projects();
     } catch (e) {
       setActionError(e.response?.data?.error || 'Silinemedi.');
     } finally { setSaving(false); }
