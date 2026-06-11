@@ -167,8 +167,10 @@ public class PotentialSaleService {
         }
 
         // KAZANILDI → başka statü: PaymentItem sil (tamamlanmamış — tamamlanmışsa zaten yukarıda bloklandı)
+        // Not: findFirstBySourceOrderId().delete() yerine JPQL bulk delete kullanıyoruz — Project.paymentPlan
+        // EAGER + CascadeType.ALL yüzünden first-level cache'de çakışma yaşanıyordu.
         if (oldStatus == PotentialSale.Status.KAZANILDI && newStatus != PotentialSale.Status.KAZANILDI) {
-            paymentItemRepository.findFirstBySourceOrderId(id).ifPresent(paymentItemRepository::delete);
+            paymentItemRepository.deleteAllBySourceOrderId(id);
         }
 
         return Optional.of(saved);
@@ -188,8 +190,8 @@ public class PotentialSaleService {
                     throw new IllegalArgumentException(
                         "Bu siparişe ait ödeme alındı olarak işaretlenmiş. Silebilmek için önce ödeme kalemini silin.");
                 }
-                paymentItemRepository.delete(item);
             });
+            paymentItemRepository.deleteAllBySourceOrderId(id);
         }
 
         String saleName = sale.getName();
