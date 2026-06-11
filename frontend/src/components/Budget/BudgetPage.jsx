@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import SearchableSelect from '../SearchableSelect';
-import { useProjects, usePersonnel, useSeniorities, useOrganization, useProjectTypes, useAllProjectCosts } from '../../hooks/useQueries';
+import { useProjects, usePersonnel, useSeniorities, useAllProjectCosts, useOrganization } from '../../hooks/useQueries';
 
 const MONTHS_SHORT = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
 const MONTHS_FULL  = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
@@ -9,11 +9,11 @@ const ALL_MONTHS   = [1,2,3,4,5,6,7,8,9,10,11,12];
 const fmt = (n) => (n || 0).toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
 const METRICS = [
-  { key: 'plannedCost',     label: 'Planlanan Maliyet',    color: '#f5a623', dash: true  },
-  { key: 'actualCost',      label: 'Gerçekleşen Maliyet',  color: '#f05c5c', dash: false },
-  { key: 'plannedRevenue',  label: 'Planlanan Gelir',       color: '#4f8ef7', dash: true  },
-  { key: 'actualRevenue',   label: 'Gerçekleşen Gelir',     color: '#34c97a', dash: false },
-  { key: 'plannedCashflow', label: 'Planlanan Nakit Akışı', color: '#a78bfa', dash: true  },
+  { key: 'plannedCost',     label: 'Planlanan Maliyet',   color: '#f5a623', dash: true  },
+  { key: 'actualCost',      label: 'Gerçekleşen Maliyet', color: '#f05c5c', dash: false },
+  { key: 'plannedRevenue',  label: 'Planlanan Gelir',      color: '#4f8ef7', dash: true  },
+  { key: 'actualRevenue',   label: 'Gerçekleşen Gelir',    color: '#34c97a', dash: false },
+  { key: 'plannedCashflow', label: 'Planlanan Fark',        color: '#a78bfa', dash: true  },
 ];
 
 function getRateForMonth(rates, year, month) {
@@ -29,7 +29,6 @@ function getRateForMonth(rates, year, month) {
 function calcProjectMonthlyCosts(project, personnelMap, seniorityMap) {
   const planned = {}, actual = {};
   for (const entry of (project.resourcePlan || [])) {
-    // Proje tarih aralığı dışındaki girdileri atla
     const afterStart = (entry.year > project.startYear) || (entry.year === project.startYear && entry.month >= project.startMonth);
     const beforeEnd  = (entry.year < project.endYear)   || (entry.year === project.endYear   && entry.month <= project.endMonth);
     if (!afterStart || !beforeEnd) continue;
@@ -48,14 +47,18 @@ function calcProjectMonthlyCosts(project, personnelMap, seniorityMap) {
 function calcProjectMonthlyRevenue(project) {
   const planned = {}, actual = {};
   for (const item of (project.paymentPlan || [])) {
-    // completed=true olan ödemeler gerçekleşen'de sayıldığından planlanan'a dahil edilmez
     if (item.plannedMonth && item.plannedYear && !item.completed) {
       const key = `${item.plannedYear}_${item.plannedMonth}`;
       planned[key] = (planned[key] || 0) + (item.amount || 0);
     }
-    if (item.completed && item.actualMonth && item.actualYear) {
-      const key = `${item.actualYear}_${item.actualMonth}`;
-      actual[key] = (actual[key] || 0) + (item.actualAmount || item.amount || 0);
+    if (item.completed) {
+      // actualMonth/Year varsa onu kullan, yoksa plannedMonth/Year'a düş
+      const m = item.actualMonth || item.plannedMonth;
+      const y = item.actualYear  || item.plannedYear;
+      if (m && y) {
+        const key = `${y}_${m}`;
+        actual[key] = (actual[key] || 0) + (item.actualAmount || item.amount || 0);
+      }
     }
   }
   return { planned, actual };
@@ -107,7 +110,6 @@ function Chart({ monthlyData, chartType, onToggleType, activeMetrics }) {
       </div>
 
       <svg width={W} height={H} style={{ display: 'block', width: '100%' }}>
-        {/* Y grid */}
         {Array.from({ length: 6 }, (_, i) => {
           const v = minV + (range / 5) * (5 - i);
           const y = toY(v);
@@ -128,7 +130,6 @@ function Chart({ monthlyData, chartType, onToggleType, activeMetrics }) {
             stroke="var(--border-light)" strokeWidth={1.5} />
         )}
 
-        {/* X labels */}
         {ALL_MONTHS.map((m, i) => (
           <text key={m} x={xPos(i)} y={H - PAD.bottom + 16}
             textAnchor="middle" fontSize={11} fill="var(--text-muted)"
@@ -137,7 +138,6 @@ function Chart({ monthlyData, chartType, onToggleType, activeMetrics }) {
           </text>
         ))}
 
-        {/* BAR */}
         {chartType === 'bar' && monthlyData.map((d, i) => {
           const cx = xPos(i);
           const totalW = barW * visibleMetrics.length;
@@ -152,7 +152,6 @@ function Chart({ monthlyData, chartType, onToggleType, activeMetrics }) {
           });
         })}
 
-        {/* LINE */}
         {chartType === 'line' && visibleMetrics.map(m => (
           <g key={m.key}>
             <polyline
@@ -165,7 +164,6 @@ function Chart({ monthlyData, chartType, onToggleType, activeMetrics }) {
           </g>
         ))}
 
-        {/* Axes */}
         <line x1={PAD.left} y1={PAD.top} x2={PAD.left} y2={PAD.top + iH} stroke="var(--border)" strokeWidth={1} />
         <line x1={PAD.left} y1={PAD.top + iH} x2={W - PAD.right} y2={PAD.top + iH} stroke="var(--border)" strokeWidth={1} />
       </svg>
@@ -181,12 +179,9 @@ export default function BudgetPage() {
   const { data: projects = [], isLoading: loadingProjects } = useProjects();
   const { data: personnelList = [] } = usePersonnel();
   const { data: seniorities = [] } = useSeniorities();
-  const { data: orgUnits = [] } = useOrganization();
-  const { data: projectTypes = [] } = useProjectTypes();
   const { data: allCosts = [] } = useAllProjectCosts();
-  const loading = loadingProjects;
+  const { data: orgUnits = [] } = useOrganization();
 
-  // Proje başına gerçekleşen maliyet toplamı
   const costsByProjectId = useMemo(() => {
     const map = {};
     for (const c of allCosts) {
@@ -195,26 +190,30 @@ export default function BudgetPage() {
     return map;
   }, [allCosts]);
 
-  const [selectedYear,   setSelectedYear]   = useState(currentYear);
+  const [selectedYear,      setSelectedYear]      = useState(currentYear);
   const [selectedProjectId, setSelectedProjectId] = useState('all');
-  const [chartType,      setChartType]      = useState('bar');
-  const [activeMetrics,  setActiveMetrics]  = useState(
+  const [chartType,         setChartType]         = useState('bar');
+  const [activeMetrics,     setActiveMetrics]     = useState(
     new Set(['plannedCost', 'plannedRevenue', 'plannedCashflow'])
   );
-  const [activeTab, setActiveTab] = useState('analiz');
-  const [analysisMonth, setAnalysisMonth] = useState(currentMonth < 12 ? currentMonth + 1 : 12);
-  const [collapsedGroups, setCollapsedGroups] = useState(new Set());
-  const [sortCol, setSortCol] = useState(null);   // 'name'|'plannedCost'|'remainingBudget'|'potentialSales'|'totalAvailable'|'diff'
-  const [sortDir, setSortDir] = useState('asc');  // 'asc'|'desc'
+  const [activeTab,         setActiveTab]         = useState('analiz');
+  const [analysisMonth,     setAnalysisMonth]     = useState(currentMonth < 12 ? currentMonth + 1 : 12);
+  const [collapsedGroups,   setCollapsedGroups]   = useState(new Set());
+  const [sortCol,           setSortCol]           = useState(null);
+  const [sortDir,           setSortDir]           = useState('asc');
 
   const personnelMap   = useMemo(() => Object.fromEntries(personnelList.map(p => [p.id, p])), [personnelList]);
   const seniorityMap   = useMemo(() => Object.fromEntries(seniorities.map(s => [s.id, s])),   [seniorities]);
-  const orgMap         = useMemo(() => Object.fromEntries(orgUnits.map(u => [u.id, u])),       [orgUnits]);
   const availableYears = useMemo(() => getProjectYears(projects), [projects]);
 
+  // Potansiyel projeler bütçe analizinde gösterilmez
+  const activeProjects = useMemo(() =>
+    projects.filter(p => p.projectStatus !== 'POTANSIYEL'),
+    [projects]);
+
   const filteredProjects = useMemo(() =>
-    selectedProjectId === 'all' ? projects : projects.filter(p => p.id === selectedProjectId),
-    [projects, selectedProjectId]);
+    selectedProjectId === 'all' ? activeProjects : activeProjects.filter(p => p.id === selectedProjectId),
+    [activeProjects, selectedProjectId]);
 
   const monthlyData = useMemo(() => {
     return ALL_MONTHS.map(month => {
@@ -253,7 +252,7 @@ export default function BudgetPage() {
     });
   };
 
-  if (loading) return <div className="loading">Yükleniyor...</div>;
+  if (loadingProjects) return <div className="loading">Yükleniyor...</div>;
 
   return (
     <div>
@@ -261,7 +260,7 @@ export default function BudgetPage() {
       <div className="page-header" style={{ flexWrap: 'wrap', gap: 12 }}>
         <div>
           <div className="page-title">Bütçe Yönetimi</div>
-          <div className="page-subtitle">Nakit akışı ve maliyet analizi</div>
+          <div className="page-subtitle">Maliyet ve gelir analizi</div>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <select className="form-select" style={{ width: 100 }}
@@ -277,7 +276,7 @@ export default function BudgetPage() {
             placeholder="Tüm Projeler"
             options={[
               { value: 'all', label: 'Tüm Projeler' },
-              ...projects.map(p => ({ value: String(p.id), label: p.name })),
+              ...activeProjects.map(p => ({ value: String(p.id), label: p.name })),
             ]}
           />
         </div>
@@ -296,53 +295,41 @@ export default function BudgetPage() {
         ))}
       </div>
 
+      {/* BÜTÇE ANALİZİ */}
       {activeTab === 'analiz' && (() => {
         const analysisYear = selectedYear;
 
-        // Müşterili ve Dış projeler — proje filtresi de uygulanır
-        const analysisTypeIds = new Set(
-          projectTypes
-            .filter(t => ['müşterili', 'dış'].includes(t.name.toLowerCase()))
-            .map(t => t.id)
-        );
-        const analysisProjects = projects.filter(p =>
-          (analysisTypeIds.size === 0 || analysisTypeIds.has(p.projectType)) &&
-          (selectedProjectId === 'all' || String(p.id) === String(selectedProjectId))
-        );
-
-        // Her proje için hesapla
-        const rows = analysisProjects.map(project => {
+        const rows = filteredProjects.map(project => {
           const costs = calcProjectMonthlyCosts(project, personnelMap, seniorityMap);
           let plannedCost = 0;
           for (let m = analysisMonth; m <= 12; m++) {
             plannedCost += costs.planned[`${analysisYear}_${m}`] || 0;
           }
-          const remainingBudget = (project.budget || 0) - (costsByProjectId[project.id] || 0);
-          const potentialSales  = project.potentialSales  || 0;
-          const totalAvailable  = remainingBudget + potentialSales;
-          const diff = totalAvailable - plannedCost;
-          const hasData = (project.budget || 0) > 0 || potentialSales > 0;
-          const status = !hasData ? '—' : diff >= 0 ? 'Yeterli' : 'Açık';
+          const gerçekleşenMaliyet = costsByProjectId[project.id] || 0;
+          const kalanBütçe = (project.budget || 0) - gerçekleşenMaliyet;
+          const fark = kalanBütçe - plannedCost;
+          const hasData = (project.budget || 0) > 0;
+          const durum = !hasData ? '—' : fark >= 0 ? 'Yeterli' : 'Açık';
 
-          // Eksiye düşüş — Toplam Pot. Kalan Bütçeye göre
-          let eksiyeAy = null;
-          // Eksiye düşüş — Yalnızca Kalan Bütçeye göre
-          let eksiyeAyKalan = null;
+          // Planlanan maliyetin kalan bütçeyi aştığı ilk ay
+          let bütçeAşımAyı = null;
           let cumCost = 0;
           for (let m = analysisMonth; m <= 12; m++) {
             cumCost += costs.planned[`${analysisYear}_${m}`] || 0;
-            if (!eksiyeAy      && cumCost > totalAvailable)    eksiyeAy      = MONTHS_FULL[m - 1];
-            if (!eksiyeAyKalan && cumCost > remainingBudget)   eksiyeAyKalan = MONTHS_FULL[m - 1];
+            if (!bütçeAşımAyı && cumCost > kalanBütçe) {
+              bütçeAşımAyı = MONTHS_FULL[m - 1];
+            }
           }
-          return { project, plannedCost, remainingBudget, potentialSales, totalAvailable, diff, status, eksiyeAy, eksiyeAyKalan };
+
+          return { project, plannedCost, gerçekleşenMaliyet, kalanBütçe, fark, durum, bütçeAşımAyı };
         });
 
-        // EMY bazında grupla
+        // Birim bazında grupla
+        const orgUnitMap = Object.fromEntries(orgUnits.map(u => [u.id, u.name]));
         const grouped = {};
         for (const row of rows) {
           const unitId   = row.project.unitId || '__none__';
-          const unitName = unitId === '__none__' ? 'EMY Atanmamış'
-            : (orgMap[unitId]?.name || 'Bilinmeyen Birim');
+          const unitName = unitId === '__none__' ? 'Birim Atanmamış' : (orgUnitMap[unitId] || `Birim #${unitId}`);
           if (!grouped[unitId]) grouped[unitId] = { name: unitName, rows: [] };
           grouped[unitId].rows.push(row);
         }
@@ -352,7 +339,6 @@ export default function BudgetPage() {
           return grouped[a].name.localeCompare(grouped[b].name, 'tr');
         });
 
-        // Sıralama yardımcısı
         function sortedRows(groupRows) {
           if (!sortCol) return groupRows;
           return [...groupRows].sort((a, b) => {
@@ -378,22 +364,19 @@ export default function BudgetPage() {
         }
 
         const grandTotal = rows.reduce((acc, r) => ({
-          plannedCost:    acc.plannedCost     + r.plannedCost,
-          remainingBudget:acc.remainingBudget + r.remainingBudget,
-          potentialSales: acc.potentialSales  + r.potentialSales,
-          totalAvailable: acc.totalAvailable  + r.totalAvailable,
-          diff:           acc.diff            + r.diff,
-        }), { plannedCost: 0, remainingBudget: 0, potentialSales: 0, totalAvailable: 0, diff: 0 });
+          plannedCost:       acc.plannedCost       + r.plannedCost,
+          gerçekleşenMaliyet:acc.gerçekleşenMaliyet + r.gerçekleşenMaliyet,
+          kalanBütçe:        acc.kalanBütçe        + r.kalanBütçe,
+          fark:              acc.fark              + r.fark,
+        }), { plannedCost: 0, gerçekleşenMaliyet: 0, kalanBütçe: 0, fark: 0 });
 
         const monoR = { textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 13 };
 
-        // Sıralanabilir kolon başlığı
         function SortTh({ col, label, align = 'right' }) {
           const active = sortCol === col;
           return (
             <th onClick={() => toggleSort(col)} style={{
-              textAlign: align, cursor: 'pointer', userSelect: 'none',
-              whiteSpace: 'nowrap',
+              textAlign: align, cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap',
               color: active ? 'var(--accent)' : undefined,
             }}>
               {label}{' '}
@@ -406,7 +389,6 @@ export default function BudgetPage() {
 
         return (
           <div>
-            {/* Filtreler */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
               <label className="form-label" style={{ margin: 0 }}>Analiz Başlangıç Ayı:</label>
               <select className="form-select" style={{ width: 150 }}
@@ -414,7 +396,7 @@ export default function BudgetPage() {
                 {MONTHS_FULL.map((m, i) => <option key={i+1} value={i+1}>{m}</option>)}
               </select>
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                {MONTHS_FULL[analysisMonth - 1]} – Aralık {analysisYear} arası hesaplanır
+                {MONTHS_FULL[analysisMonth - 1]} – Aralık {analysisYear} arası planlanan maliyet hesaplanır
               </span>
             </div>
 
@@ -423,34 +405,29 @@ export default function BudgetPage() {
                 <table>
                   <thead>
                     <tr>
-                      <SortTh col="name" label="Proje" align="left" />
-                      <SortTh col="plannedCost"     label="Planlanan Maliyet (₺)" />
-                      <SortTh col="remainingBudget" label="Kalan Bütçe (₺)" />
-                      <SortTh col="potentialSales"  label="Potansiyel Satış (₺)" />
-                      <SortTh col="totalAvailable"  label="Top. Pot. Kalan Bütçe (₺)" />
-                      <SortTh col="diff"            label="Fark (₺)" />
+                      <SortTh col="name"               label="Proje"                  align="left" />
+                      <SortTh col="plannedCost"         label="Planlanan Maliyet (₺)" />
+                      <SortTh col="gerçekleşenMaliyet"  label="Gerçekleşen Maliyet (₺)" />
+                      <SortTh col="kalanBütçe"          label="Kalan Bütçe (₺)" />
+                      <SortTh col="fark"                label="Fark (₺)" />
                       <th style={{ textAlign: 'center' }}>Durum</th>
-                      <th style={{ textAlign: 'center' }}>Eksiye Düşüş (Pot.)</th>
-                      <th style={{ textAlign: 'center' }}>Eksiye Düşüş (Kalan)</th>
+                      <th style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>Bütçe Aşım Ayı</th>
                     </tr>
                   </thead>
                   <tbody>
                     {groups.map(([unitId, group]) => {
                       const collapsed = collapsedGroups.has(unitId);
                       const gTotal = group.rows.reduce((acc, r) => ({
-                        plannedCost:    acc.plannedCost     + r.plannedCost,
-                        remainingBudget:acc.remainingBudget + r.remainingBudget,
-                        potentialSales: acc.potentialSales  + r.potentialSales,
-                        totalAvailable: acc.totalAvailable  + r.totalAvailable,
-                        diff:           acc.diff            + r.diff,
-                      }), { plannedCost: 0, remainingBudget: 0, potentialSales: 0, totalAvailable: 0, diff: 0 });
+                        plannedCost:        acc.plannedCost        + r.plannedCost,
+                        gerçekleşenMaliyet: acc.gerçekleşenMaliyet + r.gerçekleşenMaliyet,
+                        kalanBütçe:         acc.kalanBütçe         + r.kalanBütçe,
+                        fark:               acc.fark               + r.fark,
+                      }), { plannedCost: 0, gerçekleşenMaliyet: 0, kalanBütçe: 0, fark: 0 });
 
                       return [
-                        // EMY grup başlığı — tıklanabilir
-                        <tr key={`grp-${unitId}`}
-                          onClick={() => toggleGroup(unitId)}
+                        <tr key={`grp-${unitId}`} onClick={() => toggleGroup(unitId)}
                           style={{ background: 'var(--bg-hover)', cursor: 'pointer' }}>
-                          <td colSpan={9} style={{
+                          <td colSpan={7} style={{
                             fontWeight: 700, fontSize: 12, color: 'var(--accent)',
                             padding: '8px 14px', letterSpacing: '0.4px', textTransform: 'uppercase',
                           }}>
@@ -461,60 +438,53 @@ export default function BudgetPage() {
                           </td>
                         </tr>,
 
-                        // Proje satırları (collapsed ise gösterme)
-                        ...(!collapsed ? sortedRows(group.rows).map(({ project, plannedCost, remainingBudget, potentialSales, totalAvailable, diff, status, eksiyeAy, eksiyeAyKalan }) => (
+                        ...(!collapsed ? sortedRows(group.rows).map(({ project, plannedCost, gerçekleşenMaliyet, kalanBütçe, fark, durum, bütçeAşımAyı }) => (
                           <tr key={project.id}>
                             <td style={{ paddingLeft: 24, fontWeight: 500 }}>{project.name}</td>
                             <td style={{ ...monoR }}>{plannedCost > 0 ? fmt(plannedCost) : '—'}</td>
-                            <td style={{ ...monoR, color: 'var(--accent)' }}>{remainingBudget > 0 ? fmt(remainingBudget) : '—'}</td>
-                            <td style={{ ...monoR, color: '#34c97a' }}>{potentialSales > 0 ? fmt(potentialSales) : '—'}</td>
-                            <td style={{ ...monoR, color: '#a78bfa', fontWeight: 600 }}>{totalAvailable > 0 ? fmt(totalAvailable) : '—'}</td>
-                            <td style={{ ...monoR, fontWeight: 600, color: diff >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-                              {status === '—' ? '—' : `${diff >= 0 ? '+' : ''}${fmt(diff)}`}
+                            <td style={{ ...monoR, color: '#f05c5c' }}>{gerçekleşenMaliyet > 0 ? fmt(gerçekleşenMaliyet) : '—'}</td>
+                            <td style={{ ...monoR, color: 'var(--accent)' }}>{kalanBütçe > 0 ? fmt(kalanBütçe) : kalanBütçe < 0 ? <span style={{color:'#f05c5c'}}>{fmt(kalanBütçe)}</span> : '—'}</td>
+                            <td style={{ ...monoR, fontWeight: 600, color: fark >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                              {durum === '—' ? '—' : `${fark >= 0 ? '+' : ''}${fmt(fark)}`}
                             </td>
                             <td style={{ textAlign: 'center' }}>
                               <span style={{
                                 fontSize: 12, fontWeight: 600, padding: '3px 10px', borderRadius: 20,
-                                background: status === 'Yeterli' ? 'var(--success)22' : status === 'Açık' ? 'var(--danger)22' : 'var(--bg-hover)',
-                                color: status === 'Yeterli' ? 'var(--success)' : status === 'Açık' ? 'var(--danger)' : 'var(--text-muted)',
-                              }}>{status === 'Yeterli' ? '✓ Yeterli' : status === 'Açık' ? '✗ Açık' : '—'}</span>
+                                background: durum === 'Yeterli' ? 'var(--success)22' : durum === 'Açık' ? 'var(--danger)22' : 'var(--bg-hover)',
+                                color: durum === 'Yeterli' ? 'var(--success)' : durum === 'Açık' ? 'var(--danger)' : 'var(--text-muted)',
+                              }}>
+                                {durum === 'Yeterli' ? '✓ Yeterli' : durum === 'Açık' ? '✗ Açık' : '—'}
+                              </span>
                             </td>
-                            <td style={{ textAlign: 'center', fontSize: 13, color: eksiyeAy ? 'var(--warning)' : status === 'Yeterli' ? 'var(--success)' : 'var(--text-muted)' }}>
-                              {eksiyeAy || (status === '—' ? '—' : '✓ Yok')}
-                            </td>
-                            <td style={{ textAlign: 'center', fontSize: 13, color: eksiyeAyKalan ? '#f05c5c' : remainingBudget > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
-                              {eksiyeAyKalan || (remainingBudget === 0 ? '—' : '✓ Yok')}
+                            <td style={{ textAlign: 'center', fontSize: 13, color: bütçeAşımAyı ? 'var(--warning)' : durum === 'Yeterli' ? 'var(--success)' : 'var(--text-muted)' }}>
+                              {bütçeAşımAyı || (durum === '—' ? '—' : '✓ Yok')}
                             </td>
                           </tr>
                         )) : []),
 
-                        // Grup alt toplamı
                         <tr key={`grp-total-${unitId}`} style={{ background: 'var(--bg-secondary)', borderTop: '1px solid var(--border)' }}>
                           <td style={{ paddingLeft: 24, fontWeight: 600, fontSize: 12, color: 'var(--text-secondary)' }}>
                             {group.name} Toplamı
                           </td>
                           <td style={{ ...monoR, fontWeight: 700 }}>{fmt(gTotal.plannedCost)}</td>
-                          <td style={{ ...monoR, fontWeight: 700, color: 'var(--accent)' }}>{fmt(gTotal.remainingBudget)}</td>
-                          <td style={{ ...monoR, fontWeight: 700, color: '#34c97a' }}>{fmt(gTotal.potentialSales)}</td>
-                          <td style={{ ...monoR, fontWeight: 700, color: '#a78bfa' }}>{fmt(gTotal.totalAvailable)}</td>
-                          <td style={{ ...monoR, fontWeight: 700, color: gTotal.diff >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-                            {gTotal.diff >= 0 ? '+' : ''}{fmt(gTotal.diff)}
+                          <td style={{ ...monoR, fontWeight: 700, color: '#f05c5c' }}>{fmt(gTotal.gerçekleşenMaliyet)}</td>
+                          <td style={{ ...monoR, fontWeight: 700, color: 'var(--accent)' }}>{fmt(gTotal.kalanBütçe)}</td>
+                          <td style={{ ...monoR, fontWeight: 700, color: gTotal.fark >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                            {gTotal.fark >= 0 ? '+' : ''}{fmt(gTotal.fark)}
                           </td>
-                          <td /><td /><td />
+                          <td /><td />
                         </tr>,
                       ];
                     })}
-                    {/* GENEL TOPLAM */}
                     <tr style={{ borderTop: '2px solid var(--accent)', fontWeight: 700, background: 'var(--bg-card)' }}>
                       <td style={{ fontWeight: 700 }}>GENEL TOPLAM ({rows.length} proje)</td>
                       <td style={{ ...monoR, fontWeight: 700 }}>{fmt(grandTotal.plannedCost)}</td>
-                      <td style={{ ...monoR, fontWeight: 700, color: 'var(--accent)' }}>{fmt(grandTotal.remainingBudget)}</td>
-                      <td style={{ ...monoR, fontWeight: 700, color: '#34c97a' }}>{fmt(grandTotal.potentialSales)}</td>
-                      <td style={{ ...monoR, fontWeight: 700, color: '#a78bfa' }}>{fmt(grandTotal.totalAvailable)}</td>
-                      <td style={{ ...monoR, fontWeight: 700, color: grandTotal.diff >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-                        {grandTotal.diff >= 0 ? '+' : ''}{fmt(grandTotal.diff)}
+                      <td style={{ ...monoR, fontWeight: 700, color: '#f05c5c' }}>{fmt(grandTotal.gerçekleşenMaliyet)}</td>
+                      <td style={{ ...monoR, fontWeight: 700, color: 'var(--accent)' }}>{fmt(grandTotal.kalanBütçe)}</td>
+                      <td style={{ ...monoR, fontWeight: 700, color: grandTotal.fark >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                        {grandTotal.fark >= 0 ? '+' : ''}{fmt(grandTotal.fark)}
                       </td>
-                      <td /><td /><td />
+                      <td /><td />
                     </tr>
                   </tbody>
                 </table>
@@ -524,103 +494,100 @@ export default function BudgetPage() {
         );
       })()}
 
+      {/* GRAFİK & ÖZET */}
       {activeTab === 'grafik' && <>
-      {/* METRİK SEÇİCİ */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
-        {METRICS.map(m => (
-          <button key={m.key} onClick={() => toggleMetric(m.key)} style={{
-            display: 'flex', alignItems: 'center', gap: 7,
-            padding: '6px 14px', borderRadius: 20, cursor: 'pointer',
-            border: `1px solid ${activeMetrics.has(m.key) ? m.color : 'var(--border)'}`,
-            background: activeMetrics.has(m.key) ? `${m.color}22` : 'var(--bg-secondary)',
-            color: activeMetrics.has(m.key) ? m.color : 'var(--text-muted)',
-            fontSize: 12, fontWeight: 500, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s',
-          }}>
-            <svg width={20} height={10}>
-              <line x1={0} y1={5} x2={20} y2={5} stroke={m.color} strokeWidth={2}
-                strokeDasharray={m.dash ? '5,3' : ''} />
-            </svg>
-            {m.label}
-          </button>
-        ))}
-      </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+          {METRICS.map(m => (
+            <button key={m.key} onClick={() => toggleMetric(m.key)} style={{
+              display: 'flex', alignItems: 'center', gap: 7,
+              padding: '6px 14px', borderRadius: 20, cursor: 'pointer',
+              border: `1px solid ${activeMetrics.has(m.key) ? m.color : 'var(--border)'}`,
+              background: activeMetrics.has(m.key) ? `${m.color}22` : 'var(--bg-secondary)',
+              color: activeMetrics.has(m.key) ? m.color : 'var(--text-muted)',
+              fontSize: 12, fontWeight: 500, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s',
+            }}>
+              <svg width={20} height={10}>
+                <line x1={0} y1={5} x2={20} y2={5} stroke={m.color} strokeWidth={2}
+                  strokeDasharray={m.dash ? '5,3' : ''} />
+              </svg>
+              {m.label}
+            </button>
+          ))}
+        </div>
 
-      {/* ÖZET KARTLAR */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 24 }}>
-        {[
-          { label: `${selectedYear} Planlanan Maliyet`,    value: totals.plannedCost,     color: '#f5a623' },
-          { label: `${selectedYear} Planlanan Gelir`,      value: totals.plannedRevenue,  color: '#4f8ef7' },
-          { label: 'Planlanan Net Nakit Akışı',            value: totals.plannedCashflow, color: totals.plannedCashflow >= 0 ? '#34c97a' : '#f05c5c', signed: true },
-          { label: `${selectedYear} Gerçekleşen Maliyet`,  value: totals.actualCost,      color: '#f05c5c' },
-          { label: `${selectedYear} Gerçekleşen Gelir`,    value: totals.actualRevenue,   color: '#34c97a' },
-          { label: 'Gerçekleşen Net Nakit Akışı',          value: totals.actualCashflow,  color: totals.actualCashflow >= 0 ? '#34c97a' : '#f05c5c', signed: true },
-        ].map(({ label, value, color, signed }) => (
-          <div key={label} style={{ padding: '14px 18px', background: 'var(--bg-card)', border: `1px solid ${color}33`, borderRadius: 10 }}>
-            <div style={{ fontSize: 11, color, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 5 }}>{label}</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color, fontFamily: 'DM Mono, monospace' }}>
-              {signed && (value || 0) > 0 ? '+' : ''}{fmt(value || 0)}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 24 }}>
+          {[
+            { label: `${selectedYear} Planlanan Maliyet`,   value: totals.plannedCost,     color: '#f5a623' },
+            { label: `${selectedYear} Planlanan Gelir`,     value: totals.plannedRevenue,  color: '#4f8ef7' },
+            { label: 'Planlanan Fark',                      value: totals.plannedCashflow, color: totals.plannedCashflow >= 0 ? '#34c97a' : '#f05c5c', signed: true },
+            { label: `${selectedYear} Gerçekleşen Maliyet`, value: totals.actualCost,      color: '#f05c5c' },
+            { label: `${selectedYear} Gerçekleşen Gelir`,   value: totals.actualRevenue,   color: '#34c97a' },
+            { label: 'Gerçekleşen Fark',                    value: totals.actualCashflow,  color: totals.actualCashflow >= 0 ? '#34c97a' : '#f05c5c', signed: true },
+          ].map(({ label, value, color, signed }) => (
+            <div key={label} style={{ padding: '14px 18px', background: 'var(--bg-card)', border: `1px solid ${color}33`, borderRadius: 10 }}>
+              <div style={{ fontSize: 11, color, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 5 }}>{label}</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color, fontFamily: 'DM Mono, monospace' }}>
+                {signed && (value || 0) > 0 ? '+' : ''}{fmt(value || 0)}
+              </div>
             </div>
+          ))}
+        </div>
+
+        <div className="card" style={{ padding: 24, marginBottom: 20 }}>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 16 }}>
+            {selectedYear} — Aylık Görünüm
           </div>
-        ))}
-      </div>
-
-      {/* GRAFİK */}
-      <div className="card" style={{ padding: 24, marginBottom: 20 }}>
-        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 16 }}>
-          {selectedYear} — Aylık Görünüm
+          <Chart monthlyData={monthlyData} chartType={chartType}
+            onToggleType={setChartType} activeMetrics={activeMetrics} />
         </div>
-        <Chart monthlyData={monthlyData} chartType={chartType}
-          onToggleType={setChartType} activeMetrics={activeMetrics} />
-      </div>
 
-      {/* TABLO */}
-      <div className="card">
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontWeight: 600, fontSize: 14 }}>
-          {selectedYear} — Aylık Detay
-        </div>
-        <div className="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Ay</th>
-                {activeMetrics.has('plannedCost')     && <th style={{ textAlign: 'right', color: '#f5a623' }}>Pln. Maliyet</th>}
-                {activeMetrics.has('actualCost')      && <th style={{ textAlign: 'right', color: '#f05c5c' }}>Ger. Maliyet</th>}
-                {activeMetrics.has('plannedRevenue')  && <th style={{ textAlign: 'right', color: '#4f8ef7' }}>Pln. Gelir</th>}
-                {activeMetrics.has('actualRevenue')   && <th style={{ textAlign: 'right', color: '#34c97a' }}>Ger. Gelir</th>}
-                {activeMetrics.has('plannedCashflow') && <th style={{ textAlign: 'right', color: '#a78bfa' }}>Pln. Nakit Akışı</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {monthlyData.map((d) => (
-                <tr key={d.month}>
-                  <td style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                    {MONTHS_FULL[d.month - 1]} {selectedYear}
-                  </td>
-                  {activeMetrics.has('plannedCost')     && <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 12, color: '#f5a623' }}>{d.plannedCost > 0 ? fmt(d.plannedCost) : '—'}</td>}
-                  {activeMetrics.has('actualCost')      && <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 12, color: '#f05c5c' }}>{d.actualCost > 0 ? fmt(d.actualCost) : '—'}</td>}
-                  {activeMetrics.has('plannedRevenue')  && <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 12, color: '#4f8ef7' }}>{d.plannedRevenue > 0 ? fmt(d.plannedRevenue) : '—'}</td>}
-                  {activeMetrics.has('actualRevenue')   && <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 12, color: '#34c97a' }}>{d.actualRevenue > 0 ? fmt(d.actualRevenue) : '—'}</td>}
-                  {activeMetrics.has('plannedCashflow') && (
-                    <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 12, color: d.plannedCashflow >= 0 ? '#a78bfa' : '#f05c5c', fontWeight: d.plannedCashflow !== 0 ? 600 : 400 }}>
-                      {d.plannedCashflow !== 0 ? `${d.plannedCashflow > 0 ? '+' : ''}${fmt(d.plannedCashflow)}` : '—'}
-                    </td>
-                  )}
+        <div className="card">
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontWeight: 600, fontSize: 14 }}>
+            {selectedYear} — Aylık Detay
+          </div>
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Ay</th>
+                  {activeMetrics.has('plannedCost')     && <th style={{ textAlign: 'right', color: '#f5a623' }}>Pln. Maliyet</th>}
+                  {activeMetrics.has('actualCost')      && <th style={{ textAlign: 'right', color: '#f05c5c' }}>Ger. Maliyet</th>}
+                  {activeMetrics.has('plannedRevenue')  && <th style={{ textAlign: 'right', color: '#4f8ef7' }}>Pln. Gelir</th>}
+                  {activeMetrics.has('actualRevenue')   && <th style={{ textAlign: 'right', color: '#34c97a' }}>Ger. Gelir</th>}
+                  {activeMetrics.has('plannedCashflow') && <th style={{ textAlign: 'right', color: '#a78bfa' }}>Pln. Fark</th>}
                 </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr style={{ background: 'var(--bg-secondary)', borderTop: '2px solid var(--border)' }}>
-                <td style={{ fontWeight: 700, fontSize: 12 }}>TOPLAM</td>
-                {activeMetrics.has('plannedCost')     && <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 700, color: '#f5a623' }}>{fmt(totals.plannedCost)}</td>}
-                {activeMetrics.has('actualCost')      && <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 700, color: '#f05c5c' }}>{fmt(totals.actualCost)}</td>}
-                {activeMetrics.has('plannedRevenue')  && <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 700, color: '#4f8ef7' }}>{fmt(totals.plannedRevenue)}</td>}
-                {activeMetrics.has('actualRevenue')   && <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 700, color: '#34c97a' }}>{fmt(totals.actualRevenue)}</td>}
-                {activeMetrics.has('plannedCashflow') && <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 700, color: totals.plannedCashflow >= 0 ? '#a78bfa' : '#f05c5c' }}>{totals.plannedCashflow > 0 ? '+' : ''}{fmt(totals.plannedCashflow)}</td>}
-              </tr>
-            </tfoot>
-          </table>
+              </thead>
+              <tbody>
+                {monthlyData.map((d) => (
+                  <tr key={d.month}>
+                    <td style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                      {MONTHS_FULL[d.month - 1]} {selectedYear}
+                    </td>
+                    {activeMetrics.has('plannedCost')     && <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 12, color: '#f5a623' }}>{d.plannedCost > 0 ? fmt(d.plannedCost) : '—'}</td>}
+                    {activeMetrics.has('actualCost')      && <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 12, color: '#f05c5c' }}>{d.actualCost > 0 ? fmt(d.actualCost) : '—'}</td>}
+                    {activeMetrics.has('plannedRevenue')  && <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 12, color: '#4f8ef7' }}>{d.plannedRevenue > 0 ? fmt(d.plannedRevenue) : '—'}</td>}
+                    {activeMetrics.has('actualRevenue')   && <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 12, color: '#34c97a' }}>{d.actualRevenue > 0 ? fmt(d.actualRevenue) : '—'}</td>}
+                    {activeMetrics.has('plannedCashflow') && (
+                      <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 12, color: d.plannedCashflow >= 0 ? '#a78bfa' : '#f05c5c', fontWeight: d.plannedCashflow !== 0 ? 600 : 400 }}>
+                        {d.plannedCashflow !== 0 ? `${d.plannedCashflow > 0 ? '+' : ''}${fmt(d.plannedCashflow)}` : '—'}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr style={{ background: 'var(--bg-secondary)', borderTop: '2px solid var(--border)' }}>
+                  <td style={{ fontWeight: 700, fontSize: 12 }}>TOPLAM</td>
+                  {activeMetrics.has('plannedCost')     && <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 700, color: '#f5a623' }}>{fmt(totals.plannedCost)}</td>}
+                  {activeMetrics.has('actualCost')      && <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 700, color: '#f05c5c' }}>{fmt(totals.actualCost)}</td>}
+                  {activeMetrics.has('plannedRevenue')  && <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 700, color: '#4f8ef7' }}>{fmt(totals.plannedRevenue)}</td>}
+                  {activeMetrics.has('actualRevenue')   && <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 700, color: '#34c97a' }}>{fmt(totals.actualRevenue)}</td>}
+                  {activeMetrics.has('plannedCashflow') && <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 700, color: totals.plannedCashflow >= 0 ? '#a78bfa' : '#f05c5c' }}>{totals.plannedCashflow > 0 ? '+' : ''}{fmt(totals.plannedCashflow)}</td>}
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </div>
-      </div>
       </>}
     </div>
   );
