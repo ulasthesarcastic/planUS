@@ -24,6 +24,7 @@ import { projectCategoryApi } from './services/api';
 import DashboardPage from './components/Dashboard/DashboardPage';
 import UsersPage from './components/Users/UsersPage';
 import ActivityLogPage from './components/ActivityLog/ActivityLogPage';
+import BekleyenOdemelerPage from './components/Finance/BekleyenOdemelerPage';
 import { ToastProvider } from './components/Toast/Toaster';
 import './styles/global.css';
 
@@ -252,6 +253,7 @@ function AppContent() {
             <Route path="/general-expenses" element={<GeneralExpensesPage />} />
             <Route path="/users" element={<UsersPage />} />
             <Route path="/activity-log" element={<ActivityLogPage />} />
+            <Route path="/bekleyen-odemeler" element={<BekleyenOdemelerPage />} />
           </Routes>
         </main>
       </div>

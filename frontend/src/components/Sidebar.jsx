@@ -214,6 +214,9 @@ export default function Sidebar() {
               <NavLink to="/budget" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Bütçe Yönetimi">
                 <Icons.DollarSign />{!collapsed && <span className="nav-item-label">Bütçe Yönetimi</span>}
               </NavLink>
+              <NavLink to="/bekleyen-odemeler" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title="Bekleyen Ödemeler">
+                <Icons.Clock />{!collapsed && <span className="nav-item-label">Bekleyen Ödemeler</span>}
+              </NavLink>
             </div>
           </>
         )}

@@ -487,8 +487,10 @@ function MonthYearSelect({ year, month, onChange }) {
   );
 }
 
-function SummaryMiniCard({ title, gelir, gider }) {
+function SummaryMiniCard({ title, gelir, gider, accentColor }) {
   const fark = gelir - gider;
+  const titleColor = accentColor || 'var(--text-secondary)';
+  const borderColor = accentColor || 'var(--border)';
   const row = (label, val, color) => (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
       <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{label}</span>
@@ -496,10 +498,10 @@ function SummaryMiniCard({ title, gelir, gider }) {
     </div>
   );
   return (
-    <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 14px', flex: 1, minWidth: 0 }}>
-      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10, letterSpacing: '0.03em' }}>{title}</div>
-      {row('Gelir', gelir, '#4ade80')}
-      {row('Gider', gider, '#ef4444')}
+    <div style={{ background: 'var(--bg-secondary)', border: `1px solid ${borderColor}`, borderRadius: 8, padding: '12px 14px', flex: 1, minWidth: 0 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: titleColor, marginBottom: 10, letterSpacing: '0.03em' }}>{title}</div>
+      {row('Gelir', gelir, accentColor || '#4ade80')}
+      {gider > 0 && row('Gider', gider, '#ef4444')}
       {row('Fark', fark, valColor(fark))}
     </div>
   );
@@ -533,28 +535,37 @@ function PeriodAnalysisPanel({ monthlyAgg }) {
     const rPotSy = custom ? potSy : sy,  rPotSm = custom ? potSm : sm;
     const rPotEy = custom ? potEy : ey,  rPotEm = custom ? potEm : em;
 
-    let gercGelir = 0, gercGider = 0, planGelir = 0, planGider = 0, potGelir = 0;
+    let gercGelir = 0, gercGider = 0, planGelir = 0, planGider = 0, potGelir = 0, bekleyenGelir = 0;
     for (const d of Object.values(monthlyAgg)) {
       const { year, month } = d;
-      const isCurrentOrFuture = year > curYear || (year === curYear && month >= curMonth);
+      const isPast = year < curYear || (year === curYear && month < curMonth);
+      const isFuture = year > curYear || (year === curYear && month > curMonth);
+      const isCurrent = year === curYear && month === curMonth;
 
       if (inPeriod(year, month, rSy, rSm, rEy, rEm)) {
         gercGelir += d.gerceklesenGelir;
         gercGider += d.gerceklesenGider;
       }
-      if (isCurrentOrFuture && inPeriod(year, month, rPSy, rPSm, rPEy, rPEm)) {
-        planGelir += d.sozlesmeli;
-        planGider += d.gider;
+      // Bekleyen alacak: geçmiş ayda planlı ama henüz tahsil edilmemiş
+      if (isPast && inPeriod(year, month, rPSy, rPSm, rPEy, rPEm)) {
+        bekleyenGelir += d.sozlesmeli;
       }
-      if (isCurrentOrFuture && inPeriod(year, month, rPotSy, rPotSm, rPotEy, rPotEm)) {
+      // Planlanan: cari + gelecek aylar
+      if ((isCurrent || isFuture) && inPeriod(year, month, rPSy, rPSm, rPEy, rPEm)) {
+        planGelir += d.sozlesmeli;
+        // Gider: sadece gelecek aylar — cari ay zaten gerçekleşen gider ile kapsanıyor
+        if (isFuture) planGider += d.gider;
+        else planGider += Math.max(0, d.gider - d.gerceklesenGider);
+      }
+      if ((isCurrent || isFuture) && inPeriod(year, month, rPotSy, rPotSm, rPotEy, rPotEm)) {
         potGelir += d.potSiparis + d.potPrije;
       }
     }
-    return { gercGelir, gercGider, planGelir, planGider, potGelir };
+    return { gercGelir, gercGider, planGelir, planGider, potGelir, bekleyenGelir };
   }, [monthlyAgg, sy, sm, ey, em, custom, gSy, gSm, gEy, gEm, pSy, pSm, pEy, pEm, potSy, potSm, potEy, potEm, curYear, curMonth]);
 
-  const { gercGelir, gercGider, planGelir, planGider, potGelir } = calc;
-  const tahGelir = gercGelir + planGelir;
+  const { gercGelir, gercGider, planGelir, planGider, potGelir, bekleyenGelir } = calc;
+  const tahGelir = gercGelir + bekleyenGelir + planGelir;
   const tahGider = gercGider + planGider;
 
   const labelStyle = { fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4, display: 'block' };
@@ -607,9 +618,19 @@ function PeriodAnalysisPanel({ monthlyAgg }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
         <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--accent)', borderRadius: 8, padding: '14px 16px' }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)', marginBottom: 12 }}>Tahminlenen Finansal Durum</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Gerçekleşen Gelir</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#4ade80' }}>{fmtK(gercGelir)}</span>
+          </div>
+          {bekleyenGelir > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <span style={{ fontSize: 12, color: '#f59e0b' }}>Bekleyen Alacak</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#f59e0b' }}>{fmtK(bekleyenGelir)}</span>
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Gelir</span>
-            <span style={{ fontSize: 14, fontWeight: 700, color: '#4ade80' }}>{fmtK(tahGelir)}</span>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Planlanan Gelir</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#4ade80' }}>{fmtK(planGelir)}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Gider</span>
@@ -638,11 +659,86 @@ function PeriodAnalysisPanel({ monthlyAgg }) {
         </div>
       </div>
 
-      {/* Alt üç küçük kart */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-        <SummaryMiniCard title="Gerçekleşen" gelir={gercGelir} gider={gercGider} />
-        <SummaryMiniCard title="Planlanan"   gelir={planGelir} gider={planGider} />
-        <SummaryMiniCard title="Potansiyel"  gelir={potGelir}  gider={0} />
+      {/* Alt küçük kartlar */}
+      <div style={{ display: 'grid', gridTemplateColumns: bekleyenGelir > 0 ? 'repeat(4, 1fr)' : 'repeat(3, 1fr)', gap: 10 }}>
+        <SummaryMiniCard title="Gerçekleşen"    gelir={gercGelir}    gider={gercGider} />
+        {bekleyenGelir > 0 && (
+          <SummaryMiniCard title="Bekleyen Alacak" gelir={bekleyenGelir} gider={0} accentColor="#f59e0b" />
+        )}
+        <SummaryMiniCard title="Planlanan"      gelir={planGelir}    gider={planGider} />
+        <SummaryMiniCard title="Potansiyel"     gelir={potGelir}     gider={0} />
+      </div>
+    </div>
+  );
+}
+
+// ── Güncel Cari Durum ─────────────────────────────────────────────────────────
+
+const MONTHS_TR = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+
+function GuncelDurum({ monthlyAgg }) {
+  const now = new Date();
+  const curYear  = now.getFullYear();
+  const curMonth = now.getMonth() + 1;
+  const prevMonth = curMonth === 1 ? 12 : curMonth - 1;
+  const prevYear  = curMonth === 1 ? curYear - 1 : curYear;
+
+  const [selYear,  setSelYear]  = useState(prevYear);
+  const [selMonth, setSelMonth] = useState(prevMonth);
+
+  const years = Array.from({ length: 3 }, (_, i) => curYear - 1 + i);
+
+  // Kümülatif: seçilen yılın Ocak'ından seçilen aya kadar toplam
+  const calc = useMemo(() => {
+    let gercGelir = 0, gercGider = 0, bekleyen = 0;
+    for (let m = 1; m <= selMonth; m++) {
+      const d = monthlyAgg[`${selYear}_${m}`];
+      if (!d) continue;
+      gercGelir += d.gerceklesenGelir || 0;
+      gercGider += d.gerceklesenGider || 0;
+      // Bekleyen alacak: planlı ama tamamlanmamış (sozlesmeli), geçmiş veya seçilen ay
+      const isNotFuture = selYear < curYear || (selYear === curYear && m <= curMonth);
+      if (isNotFuture) bekleyen += d.sozlesmeli || 0;
+    }
+    const toplam = gercGelir + bekleyen - gercGider;
+    return { gercGelir, gercGider, bekleyen, toplam };
+  }, [monthlyAgg, selYear, selMonth, curYear, curMonth]);
+
+  const selStyle = { fontSize: 12, padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' };
+
+  const row = (label, val, color) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
+      <span style={{ fontSize: 13, color: color === '#f59e0b' ? '#f59e0b' : 'var(--text-secondary)' }}>{label}</span>
+      <span style={{ fontSize: 14, fontWeight: 700, fontFamily: 'DM Mono, monospace', color: color || 'var(--text-primary)' }}>{fmtK(val)}</span>
+    </div>
+  );
+
+  return (
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, marginBottom: 10, padding: '14px 18px' }}>
+      {/* Başlık + seçici */}
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
+        <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>Güncel Cari Durum</span>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Periyot</span>
+          <select value={selMonth} onChange={e => setSelMonth(Number(e.target.value))} style={selStyle}>
+            {MONTHS_TR.map((name, i) => <option key={i+1} value={i+1}>{name}</option>)}
+          </select>
+          <select value={selYear} onChange={e => setSelYear(Number(e.target.value))} style={selStyle}>
+            {years.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* Satırlar */}
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
+        Ocak {selYear} – {MONTHS_TR[selMonth - 1]} {selYear} kümülatif
+      </div>
+      {row('Gerçekleşen Gelir', calc.gercGelir, '#4ade80')}
+      {row('Gerçekleşen Gider', calc.gercGider, '#ef4444')}
+      {row('Bekleyen Alacak', calc.bekleyen, '#f59e0b')}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 10, marginTop: 2 }}>
+        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Toplam</span>
+        <span style={{ fontSize: 16, fontWeight: 800, fontFamily: 'DM Mono, monospace', color: valColor(calc.toplam) }}>{fmtK(calc.toplam)}</span>
       </div>
     </div>
   );
@@ -990,6 +1086,9 @@ export default function PnLPage() {
 
       {/* Dönem analiz paneli */}
       <PeriodAnalysisPanel monthlyAgg={monthlyAgg} />
+
+      {/* Güncel durum — ay bazlı gelir/gider özeti */}
+      <GuncelDurum monthlyAgg={monthlyAgg} />
 
       {/* Tümü özet tablosu */}
       <SummaryCard label="Tümü Toplamı" monthlyAgg={monthlyAgg} />
