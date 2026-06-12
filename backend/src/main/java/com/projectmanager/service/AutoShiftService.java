@@ -2,6 +2,9 @@ package com.projectmanager.service;
 
 import com.projectmanager.model.*;
 import com.projectmanager.repository.*;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +34,13 @@ public class AutoShiftService {
 
     public record ShiftResult(List<ShiftedItem> shiftedProjects, List<ShiftedItem> shiftedSales) {}
     public record ShiftedItem(String id, String name, String from, String to) {}
+
+    /** Uygulama başladığında ve her gece 00:05'te otomatik kaydır. */
+    @EventListener(ApplicationReadyEvent.class)
+    @Scheduled(cron = "0 5 0 * * *")
+    public void shiftOverdueScheduled() {
+        shiftOverdue();
+    }
 
     /**
      * Geçmiş ayda kalan POTANSIYEL projeleri ve AKTIF potansiyel siparişleri
