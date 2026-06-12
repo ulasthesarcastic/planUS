@@ -37,7 +37,7 @@ public class AutoShiftService {
 
     /** Uygulama başladığında ve her gece 00:05'te otomatik kaydır. */
     @EventListener(ApplicationReadyEvent.class)
-    @Scheduled(cron = "0 5 0 * * *")
+    @Scheduled(cron = "0 5 0 * * *", zone = "Europe/Istanbul")
     public void shiftOverdueScheduled() {
         shiftOverdue();
     }
@@ -48,7 +48,7 @@ public class AutoShiftService {
      */
     @Transactional
     public ShiftResult shiftOverdue() {
-        LocalDate today     = LocalDate.now();
+        LocalDate today     = LocalDate.now(java.time.ZoneId.of("Europe/Istanbul"));
         int curYear         = today.getYear();
         int curMonth        = today.getMonthValue();
 
